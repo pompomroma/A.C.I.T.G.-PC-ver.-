@@ -9,6 +9,11 @@ on:
     branches: ["claude/local-agentic-ai-pc-td4621", "main"]
     tags: ["v*"] # pushing a tag like v0.1.0 publishes a versioned release
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Publish a versioned release with this tag (e.g. v0.1.0). Leave blank to just build."
+        required: false
+        default: ""
   release:
     types: [created]
 
@@ -100,18 +105,28 @@ jobs:
             installer/output/ACTIG-Setup.exe
             installer/output/ACTIG-Setup-voice.exe
 
-      # Versioned release when a v* tag is pushed (e.g. v0.1.0).
+      # A versioned release is cut either by pushing a v* tag OR by running the workflow
+      # manually with a release_tag input (used when tag pushes aren't available).
+      - name: Resolve version tag
+        id: ver
+        shell: bash
+        run: |
+          TAG=""
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then TAG="${{ github.ref_name }}"; fi
+          if [[ -n "${{ github.event.inputs.release_tag }}" ]]; then TAG="${{ github.event.inputs.release_tag }}"; fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Publish versioned release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.ver.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ACTIG ${{ github.ref_name }}
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ACTIG ${{ steps.ver.outputs.tag }}
           files: |
             installer/output/ACTIG-Setup.exe
             installer/output/ACTIG-Setup-voice.exe
           body: |
-            ## ACTIG ${{ github.ref_name }}
+            ## ACTIG ${{ steps.ver.outputs.tag }}
 
             Two installers — copy either to a Windows PC and double-click to install.
             (Unsigned: on the SmartScreen prompt choose **More info → Run anyway**.)
