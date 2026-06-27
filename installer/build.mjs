@@ -80,6 +80,20 @@ if (existsSync(helper)) {
 }
 
 // 4. electron-builder → NSIS installer
+// Earlier failed/non-elevated runs can leave a partial electron-builder cache (e.g. an
+// nsis-*/Bin folder missing makensis.exe), which then fails with "makensis.exe ENOENT".
+// On a local Windows build, wipe that cache so NSIS + winCodeSign re-extract cleanly. The
+// big Electron binary lives in a separate cache (%LOCALAPPDATA%\electron\Cache) and is left
+// alone, so this only re-fetches a few small archives. CI keeps its cache (reused across the
+// standard + voice builds), so skip there.
+if (!process.env.CI && process.platform === "win32" && process.env.LOCALAPPDATA) {
+  const ebCache = join(process.env.LOCALAPPDATA, "electron-builder", "Cache");
+  if (existsSync(ebCache)) {
+    console.log(`\nClearing electron-builder cache (avoids stale/partial NSIS): ${ebCache}`);
+    rmSync(ebCache, { recursive: true, force: true });
+  }
+}
+
 // Never attempt code-signing on a personal PC (no cert) — it only causes failures.
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
 try {

@@ -49,6 +49,19 @@ the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two v
 **C) Just run it from source (skip the installer entirely).** Fastest way to try it:
 `scripts\dev.ps1` launches the Electron shell, which auto-starts the Python core.
 
+#### Local-build troubleshooting
+- **`makensis.exe ENOENT`** — a previous failed run left a half-extracted electron-builder
+  cache, or your antivirus quarantined NSIS's `makensis.exe` (a notorious false positive, common
+  with AhnLab V3 / Defender). `build.bat` now **auto-clears the cache** before packaging; if it
+  still happens, add a folder exclusion for `%LOCALAPPDATA%\electron-builder\Cache` (Windows
+  Security → Virus & threat protection → Exclusions) and rerun — or just use the prebuilt exe.
+- **"deprecated subdependencies" warning** (`glob`, `inflight`, `tar`, `boolean`) — **harmless,
+  ignore it.** These are build-time-only transitive deps of `electron-builder` itself; they are
+  **not** part of ACTIG and ship nothing into the installer or app. They can't be removed without
+  breaking electron-builder's packaging, and `glob`/`tar` are marked "deprecated" by their author
+  at *every* version (including the latest), so no pin clears the message. It does not affect your
+  build, the installer, or the app.
+
 ### 2. ACTIVATE
 First launch runs a one-time wizard: paste your **Claude API key** (stored encrypted), pick a
 local **Ollama** model, and grant **microphone/webcam** permission. After that ACTIG lives in

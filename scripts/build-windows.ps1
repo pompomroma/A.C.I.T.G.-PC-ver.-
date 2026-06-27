@@ -71,5 +71,16 @@ if (Test-Path $exe) {
   Write-Host "`n✅ Done: $exe" -ForegroundColor Green
   Write-Host "Copy that file to any Windows PC and double-click it to install ACTIG."
 } else {
+  Write-Warning @"
+Build did not produce $exe.
+If the error mentioned 'makensis.exe ENOENT', your antivirus most likely quarantined NSIS's
+makensis.exe (a common false positive; frequent with AhnLab V3 / Windows Defender). Fix it by:
+  • Adding a folder exclusion for  $env:LOCALAPPDATA\electron-builder\Cache
+    (Windows Security -> Virus & threat protection -> Manage settings -> Exclusions),
+    and the equivalent in AhnLab V3 if installed, then run build.bat again; OR
+  • Temporarily turning off real-time protection and rerunning; OR
+  • Skipping the build entirely and downloading the prebuilt installer from the repo's
+    Releases page (v0.1.0) — it needs no local build.
+"@
   throw "Build finished but $exe was not produced."
 }
