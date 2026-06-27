@@ -36,9 +36,15 @@ the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two v
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
 `scripts\build-windows.ps1`). It produces `installer\output\ACTIG-Setup.exe`.
-> ⚠ **Use a short folder path.** electron-builder fails if the project sits at a long path
-> (Windows' 260-char limit). Extract the project straight into something like **`C:\ACTIG`** —
-> not a deep, doubly-nested `Downloads\...` folder. The script warns you if your path is long.
+> ⚠ **Two gotchas the script handles/automates for you:**
+> - **Admin needed.** electron-builder unpacks a signing toolkit containing macOS symlinks, and
+>   creating symlinks on Windows requires admin rights — otherwise you get
+>   `Cannot create symbolic link ... libcrypto.dylib`. `build.bat` now **auto-prompts for admin
+>   (UAC)**. No admin account? Enable **Developer Mode** instead
+>   (Settings → Privacy & security → For developers → Developer Mode = On) and run it normally.
+> - **Use a short folder path.** A long path overflows Windows' 260-char limit during packaging.
+>   Extract the project into something like **`C:\ACTIG`**, not a deep `Downloads\...\...` folder.
+>   The script warns you if your path is long.
 
 **C) Just run it from source (skip the installer entirely).** Fastest way to try it:
 `scripts\dev.ps1` launches the Electron shell, which auto-starts the Python core.

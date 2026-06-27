@@ -8,6 +8,23 @@
   or just double-click  build.bat
 #>
 $ErrorActionPreference = "Stop"
+
+# Self-elevate to Administrator. electron-builder unpacks a signing toolkit (winCodeSign)
+# that contains macOS symlinks; creating symlinks on Windows needs admin privilege (or
+# Developer Mode). Without it the build dies with "Cannot create symbolic link ...
+# libcrypto.dylib". As a no-admin alternative, enable Developer Mode:
+#   Settings -> Privacy & security -> For developers -> Developer Mode = On
+$isAdmin = ([Security.Principal.WindowsPrincipal] `
+    [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+    [Security.Principal.WindowsBuiltinRole]::Administrator)
+if (-not $isAdmin) {
+  Write-Host "Re-launching with administrator privileges (needed to unpack build tools)..." -ForegroundColor Yellow
+  Start-Process powershell -Verb RunAs -ArgumentList @(
+    "-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$PSCommandPath`""
+  )
+  exit
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
