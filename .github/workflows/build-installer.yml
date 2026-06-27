@@ -112,8 +112,13 @@ jobs:
         shell: bash
         run: |
           TAG=""
+          # 1) explicit v* tag push, 2) manual dispatch input, 3) fall back to package.json
+          # version on a branch push so a normal push publishes the versioned release too.
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then TAG="${{ github.ref_name }}"; fi
           if [[ -n "${{ github.event.inputs.release_tag }}" ]]; then TAG="${{ github.event.inputs.release_tag }}"; fi
+          if [[ -z "$TAG" && "${{ github.event_name }}" == "push" ]]; then
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Publish versioned release
