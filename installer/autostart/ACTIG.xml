@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!-- Task Scheduler definition (reference). The NSIS installer creates an equivalent task
+     via schtasks; this XML documents the intended trigger/settings and can be imported with
+     `schtasks /Create /XML ACTIG.xml /TN "ACTIG Assistant"`. Implements requirement 1:
+     start automatically at every logon, run hidden, restart on failure. -->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>Starts the ACTIG assistant automatically at logon and keeps it resident.</Description>
+    <URI>\ACTIG Assistant</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <LogonTrigger>
+      <Enabled>true</Enabled>
+    </LogonTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>InteractiveToken</LogonType>
+      <RunLevel>HighestAvailable</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+    <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+    <AllowHardTerminate>false</AllowHardTerminate>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <RestartOnFailure>
+      <Interval>PT1M</Interval>
+      <Count>999</Count>
+    </RestartOnFailure>
+    <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>%LOCALAPPDATA%\Programs\ACTIG\ACTIG.exe</Command>
+      <Arguments>--hidden</Arguments>
+    </Exec>
+  </Actions>
+</Task>

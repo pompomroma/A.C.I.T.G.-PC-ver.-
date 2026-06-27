@@ -1,0 +1,25 @@
+{
+  "name": "actig",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ACTIG — Full-stack local agentic AI for PC (Jarvis-style assistant)",
+  "license": "MIT",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @actig/desktop dev",
+    "build": "pnpm -r build",
+    "backend:dev": "python -m actig.server",
+    "backend:install": "pip install -e backend[dev]",
+    "test": "pnpm -r test",
+    "test:backend": "pytest backend",
+    "lint": "pnpm -r lint",
+    "package": "node installer/build.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.0.0"
+}

@@ -1,0 +1,41 @@
+# Node / Electron
+node_modules/
+dist/
+out/
+build/
+.vite/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ACTIG runtime data (never commit user history / secrets / models)
+/runtime/
+*.actig.db
+*.sqlite
+*.sqlite3
+/assets/models/
+/assets/voices/
+.secrets/
+secrets.json
+*.pem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Installer artifacts
+/installer/output/
+*.exe
+*.msi
+*.AppImage
+*.spec.bak

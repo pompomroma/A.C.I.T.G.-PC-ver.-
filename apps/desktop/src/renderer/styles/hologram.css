@@ -1,0 +1,254 @@
+/* ACTIG hologram aesthetic — translucent cyan glass, glow, transparent backgrounds.
+   Surfaces sit over a fully transparent window so they read as holograms on screen. */
+
+:root {
+  --holo: #41e8ff;
+  --holo-dim: rgba(65, 232, 255, 0.55);
+  --holo-bg: rgba(8, 24, 34, 0.55);
+  --holo-edge: rgba(65, 232, 255, 0.35);
+  --glow: 0 0 12px rgba(65, 232, 255, 0.55), 0 0 36px rgba(65, 232, 255, 0.25);
+  --font: "Segoe UI", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font);
+  color: var(--holo);
+}
+
+/* Transparent overlay window — only the UI cards are visible/clickable. */
+.overlay-body,
+.project-body,
+.wallpaper-body {
+  background: transparent;
+  overflow: hidden;
+  user-select: none;
+}
+
+.project-body,
+.wallpaper-body {
+  background: radial-gradient(circle at 50% 60%, #021018 0%, #01060a 100%);
+}
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Generic holo card */
+.holo {
+  background: var(--holo-bg);
+  border: 1px solid var(--holo-edge);
+  border-radius: 14px;
+  box-shadow: var(--glow);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+
+/* --- Chatbox (requirement 5) --- */
+.chatbox {
+  position: fixed;
+  right: 28px;
+  bottom: 92px;
+  width: 380px;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 8px;
+}
+
+.chat-log {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  line-height: 1.35;
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+.msg.user {
+  align-self: flex-end;
+  background: rgba(65, 232, 255, 0.16);
+}
+.msg.assistant {
+  align-self: flex-start;
+  background: rgba(65, 232, 255, 0.07);
+  border: 1px solid var(--holo-edge);
+}
+.msg .meta {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--holo-dim);
+}
+
+.chat-input {
+  display: flex;
+  gap: 6px;
+}
+.chat-input input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--holo-edge);
+  border-radius: 8px;
+  color: var(--holo);
+  padding: 8px;
+  outline: none;
+}
+
+/* Chips for options/recommendations (req 1.(3)/(4)) */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.chip {
+  font-size: 12px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  border: 1px solid var(--holo-edge);
+  background: rgba(65, 232, 255, 0.08);
+}
+.chip.recommendation {
+  border-color: #ffd36a;
+  color: #ffd36a;
+}
+
+/* --- Bottom hologram bar (mic mutes, 3D, etc.) --- */
+.holobar {
+  position: fixed;
+  right: 28px;
+  bottom: 24px;
+  display: flex;
+  gap: 10px;
+  padding: 10px 14px;
+  align-items: center;
+}
+.holo-btn {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid var(--holo-edge);
+  background: rgba(65, 232, 255, 0.08);
+  font-size: 16px;
+}
+.holo-btn.active {
+  background: rgba(65, 232, 255, 0.28);
+}
+.holo-btn.muted {
+  color: #ff6a6a;
+  border-color: #ff6a6a;
+}
+
+/* --- Emergency wake button (requirement 8) — always visible --- */
+.emergency {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-weight: 700;
+  color: #001018;
+  background: radial-gradient(circle at 40% 35%, #8af6ff, #19b6d6);
+  box-shadow: var(--glow);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+/* --- Confirm dialog (guarded access) --- */
+.confirm {
+  position: fixed;
+  left: 50%;
+  top: 16%;
+  transform: translateX(-50%);
+  width: 440px;
+  padding: 16px;
+}
+.confirm h3 {
+  margin: 0 0 6px;
+}
+.confirm .risk {
+  font-size: 12px;
+  color: #ffb86a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.confirm .row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+.confirm button {
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--holo-edge);
+  background: rgba(65, 232, 255, 0.1);
+  color: var(--holo);
+}
+.confirm button.approve {
+  background: rgba(65, 232, 255, 0.3);
+}
+.confirm button.deny {
+  border-color: #ff6a6a;
+  color: #ff6a6a;
+}
+
+/* --- 3D toolbar (requirement 5: in-3D buttons) --- */
+#toolbar {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--holo-bg);
+  border: 1px solid var(--holo-edge);
+  border-radius: 12px;
+  box-shadow: var(--glow);
+}
+#toolbar button {
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--holo-edge);
+  background: rgba(65, 232, 255, 0.08);
+  color: var(--holo);
+  font-size: 12px;
+}
+#toolbar button.on {
+  background: rgba(65, 232, 255, 0.28);
+}
