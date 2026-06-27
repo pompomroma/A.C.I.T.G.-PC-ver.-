@@ -49,7 +49,10 @@ mkdirSync(join(staging, "native"), { recursive: true });
 mkdirSync(output, { recursive: true });
 
 // 1. JS deps + shared protocol build
-run("pnpm install");
+// --no-frozen-lockfile: pnpm auto-enables frozen-lockfile under CI, which fails if a
+// committed lockfile doesn't match the runner's pnpm resolution. We always allow the
+// lockfile to be (re)generated so the build never fails on lockfile validation.
+run("pnpm install --no-frozen-lockfile");
 run("pnpm --filter @actig/shared build", { optional: true });
 
 // 2. Python build deps + freeze the agent core

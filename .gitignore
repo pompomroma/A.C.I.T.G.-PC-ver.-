@@ -1,5 +1,8 @@
 # Node / Electron
 node_modules/
+# Lockfile is intentionally not committed: the build does a fresh `pnpm install`, and a
+# lockfile generated off-Windows trips pnpm's CI frozen-lockfile check.
+pnpm-lock.yaml
 dist/
 out/
 build/
