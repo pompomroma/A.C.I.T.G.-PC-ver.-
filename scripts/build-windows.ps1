@@ -17,6 +17,22 @@ function Need($name, $hint) {
   }
 }
 
+# electron-builder unpacks very deep paths; a long project path overflows Windows' 260-char
+# limit and breaks packaging. Warn early and point at the fix.
+if ($root.Length -gt 90) {
+  Write-Warning @"
+This project is at a long path:
+  $root
+electron-builder may fail because Windows limits paths to 260 characters and it unpacks deep
+node_modules/win-unpacked folders. If the build fails, MOVE this folder to a SHORT path such
+as  C:\ACTIG  and run build.bat again. (Tip: extract the ZIP straight into C:\ , not a nested
+Downloads subfolder.)
+"@
+}
+
+# Never try to code-sign on a personal machine (no certificate) — it only causes failures.
+$env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
+
 Write-Host "==> Checking prerequisites..." -ForegroundColor Cyan
 Need node   "Install Node.js 20+ from https://nodejs.org"
 Need python "Install Python 3.11 from https://python.org and check 'Add to PATH'"

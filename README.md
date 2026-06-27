@@ -20,15 +20,17 @@ whichever way suits you — then **copy that single file to the PC and double-cl
 installer sets up autostart, so ACTIG launches on **every power-on**, permanently, until you
 uninstall it.
 
-**A) Download it (no toolchain needed — recommended).** The GitHub Actions workflow
-[`.github/workflows/build-installer.yml`](.github/workflows/build-installer.yml) builds it on
-a Windows runner. Open the repo's **Actions tab → latest "Build ACTIG installer" run →
-Artifacts → `ACTIG-Setup`**, or download it from a tagged **Release**. Trigger a build anytime
-from Actions → "Run workflow".
+**A) Download the prebuilt installer (no toolchain, no building — recommended).** GitHub
+Actions builds the exe on a Windows runner and publishes it to **Releases → "ACTIG latest
+build" → `ACTIG-Setup.exe`** (a direct download — no need to build anything). You can also get
+it from the **Actions tab → latest "Build ACTIG installer" run → Artifacts → `ACTIG-Setup`**.
 
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
 `scripts\build-windows.ps1`). It produces `installer\output\ACTIG-Setup.exe`.
+> ⚠ **Use a short folder path.** electron-builder fails if the project sits at a long path
+> (Windows' 260-char limit). Extract the project straight into something like **`C:\ACTIG`** —
+> not a deep, doubly-nested `Downloads\...` folder. The script warns you if your path is long.
 
 **C) Just run it from source (skip the installer entirely).** Fastest way to try it:
 `scripts\dev.ps1` launches the Electron shell, which auto-starts the Python core.

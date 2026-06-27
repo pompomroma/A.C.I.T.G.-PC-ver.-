@@ -11,6 +11,10 @@ on:
   release:
     types: [created]
 
+# Needed so the build can publish ACTIG-Setup.exe to a GitHub Release for direct download.
+permissions:
+  contents: write
+
 jobs:
   test-backend:
     runs-on: ubuntu-latest
@@ -62,7 +66,18 @@ jobs:
           path: installer/output/ACTIG-Setup.exe
           if-no-files-found: error
 
-      - name: Attach to GitHub Release
+      # Publish a rolling "latest-build" pre-release so ACTIG-Setup.exe always has a stable,
+      # direct download link (no need to unzip an artifact or dig through the Actions tab).
+      - name: Publish latest-build release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest-build
+          name: ACTIG latest build
+          prerelease: true
+          files: installer/output/ACTIG-Setup.exe
+
+      - name: Attach to tagged Release
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:

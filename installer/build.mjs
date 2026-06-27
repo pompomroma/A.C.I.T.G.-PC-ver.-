@@ -80,7 +80,23 @@ if (existsSync(helper)) {
 }
 
 // 4. electron-builder → NSIS installer
-run("pnpm --filter @actig/desktop package");
+// Never attempt code-signing on a personal PC (no cert) — it only causes failures.
+process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
+try {
+  run("pnpm --filter @actig/desktop package");
+} catch (err) {
+  console.error(
+    "\n✗ electron-builder failed. The two common causes on a personal PC are:\n" +
+      `  1. PATH TOO LONG — this project is at:\n       ${root}\n` +
+      "     electron-builder unpacks deep node_modules/win-unpacked paths that exceed\n" +
+      "     Windows' 260-char limit. Move the project to a SHORT path like C:\\ACTIG and retry.\n" +
+      "  2. NETWORK — on first run electron-builder downloads Electron + NSIS from GitHub.\n" +
+      "     Check your internet/proxy and run it again.\n" +
+      "\n  Easiest alternative: skip building and download the prebuilt ACTIG-Setup.exe from\n" +
+      "  the repo's Releases page (the 'ACTIG latest build' release).\n",
+  );
+  throw err;
+}
 
 // 5. verify the deliverable
 const exe = join(output, "ACTIG-Setup.exe");
