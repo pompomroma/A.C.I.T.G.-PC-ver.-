@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "actig"
 version = "0.1.0"
 description = "ACTIG agent core — hybrid-brain local agentic AI for PC"
-readme = "../README.md"
+readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
@@ -59,6 +59,9 @@ include = ["actig*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Put the backend dir on sys.path so `import actig` and `from tests.fakes import ...`
+# resolve when pytest is run from the backend directory (as CI does).
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

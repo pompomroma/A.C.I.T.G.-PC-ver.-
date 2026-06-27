@@ -22,7 +22,8 @@ jobs:
       - name: Install backend (dev)
         run: pip install -e "backend[dev]"
       - name: Run tests
-        run: pytest backend -q
+        working-directory: backend
+        run: pytest -q
 
   build-windows:
     runs-on: windows-latest
