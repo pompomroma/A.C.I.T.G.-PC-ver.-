@@ -7,6 +7,7 @@ name: Build ACTIG installer
 on:
   push:
     branches: ["claude/local-agentic-ai-pc-td4621", "main"]
+    tags: ["v*"] # pushing a tag like v0.1.0 publishes a versioned release
   workflow_dispatch:
   release:
     types: [created]
@@ -53,32 +54,72 @@ jobs:
         run: pwsh installer/native/build-native.ps1
         continue-on-error: true
 
-      - name: Build installer (ACTIG-Setup.exe)
+      # 1) Standard build (text + browser speech + OS TTS). Stash it aside.
+      - name: Build standard installer
         shell: pwsh
         env:
-          ACTIG_WITH_VOICE: "0" # set to "1" to bundle the on-device voice stack
-        run: node installer/build.mjs
+          ACTIG_WITH_VOICE: "0"
+        run: |
+          node installer/build.mjs
+          Move-Item -Force installer/output/ACTIG-Setup.exe installer/output/_standard.exe
 
-      - name: Upload installer artifact
+      # 2) Full offline-voice build (faster-whisper / Piper / openWakeWord bundled).
+      #    Heavy; if it fails we still ship the standard exe, so don't fail the job.
+      - name: Build offline-voice installer
+        shell: pwsh
+        continue-on-error: true
+        env:
+          ACTIG_WITH_VOICE: "1"
+        run: |
+          node installer/build.mjs
+          Move-Item -Force installer/output/ACTIG-Setup.exe installer/output/ACTIG-Setup-voice.exe
+
+      # 3) Restore the standard exe to its canonical name.
+      - name: Finalize installer names
+        shell: pwsh
+        run: Move-Item -Force installer/output/_standard.exe installer/output/ACTIG-Setup.exe
+
+      - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ACTIG-Setup
-          path: installer/output/ACTIG-Setup.exe
+          path: |
+            installer/output/ACTIG-Setup.exe
+            installer/output/ACTIG-Setup-voice.exe
           if-no-files-found: error
 
-      # Publish a rolling "latest-build" pre-release so ACTIG-Setup.exe always has a stable,
-      # direct download link (no need to unzip an artifact or dig through the Actions tab).
+      # Rolling pre-release with a stable direct-download link on every branch push.
       - name: Publish latest-build release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest-build
           name: ACTIG latest build
           prerelease: true
-          files: installer/output/ACTIG-Setup.exe
+          files: |
+            installer/output/ACTIG-Setup.exe
+            installer/output/ACTIG-Setup-voice.exe
 
-      - name: Attach to tagged Release
-        if: github.event_name == 'release'
+      # Versioned release when a v* tag is pushed (e.g. v0.1.0).
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer/output/ACTIG-Setup.exe
+          tag_name: ${{ github.ref_name }}
+          name: ACTIG ${{ github.ref_name }}
+          files: |
+            installer/output/ACTIG-Setup.exe
+            installer/output/ACTIG-Setup-voice.exe
+          body: |
+            ## ACTIG ${{ github.ref_name }}
+
+            Two installers — copy either to a Windows PC and double-click to install.
+            (Unsigned: on the SmartScreen prompt choose **More info → Run anyway**.)
+
+            | Asset | What it includes |
+            |---|---|
+            | **ACTIG-Setup.exe** | Standard build. Text chat + browser speech-to-text + OS (SAPI) text-to-speech. Smaller, fastest to install. |
+            | **ACTIG-Setup-voice.exe** | Bundles the on-device **offline voice stack** — faster-whisper (STT), Piper (TTS), openWakeWord. Larger. The Whisper model downloads on first run; add Piper voices and the custom "wake up ACTIG" model under `assets/` per the docs for a fully-offline wake word. |
+
+            Both auto-start on boot and run in the tray. Wake with **"wake up ACTIG"**, the
+            floating emergency button, or **Ctrl+Alt+Space**.

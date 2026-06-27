@@ -28,11 +28,39 @@ hidden = [
 if sys.platform == "win32":
     hidden += ["win32com", "win32com.client", "uiautomation", "pywinauto"]
 
+datas = []
+binaries = []
+
+# When building the offline-voice variant (ACTIG_WITH_VOICE=1), pull in the voice packages'
+# code, native binaries AND data files (model assets, espeak data, onnx runtimes) so the
+# frozen exe runs the on-device STT/TTS/wake-word pipeline without any pip install.
+if os.environ.get("ACTIG_WITH_VOICE") == "1":
+    from PyInstaller.utils.hooks import collect_all
+
+    for pkg in (
+        "faster_whisper",
+        "ctranslate2",
+        "onnxruntime",
+        "piper",
+        "piper_phonemize",
+        "openwakeword",
+        "webrtcvad",
+        "sounddevice",
+        "numpy",
+    ):
+        try:
+            d, b, h = collect_all(pkg)
+            datas += d
+            binaries += b
+            hidden += h
+        except Exception as exc:  # a missing optional sub-package shouldn't break the freeze
+            print(f"[spec] collect_all({pkg}) skipped: {exc}")
+
 a = Analysis(
     [ENTRY],
     pathex=[BACKEND],
-    binaries=[],
-    datas=[],
+    binaries=binaries,
+    datas=datas,
     hiddenimports=hidden,
     hookspath=[],
     runtime_hooks=[],

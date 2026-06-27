@@ -21,9 +21,17 @@ installer sets up autostart, so ACTIG launches on **every power-on**, permanentl
 uninstall it.
 
 **A) Download the prebuilt installer (no toolchain, no building — recommended).** GitHub
-Actions builds the exe on a Windows runner and publishes it to **Releases → "ACTIG latest
-build" → `ACTIG-Setup.exe`** (a direct download — no need to build anything). You can also get
-it from the **Actions tab → latest "Build ACTIG installer" run → Artifacts → `ACTIG-Setup`**.
+Actions builds the installers on a Windows runner and publishes them to **Releases** — both
+the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two variants:
+
+| Asset | Includes | Pick this if |
+|---|---|---|
+| **`ACTIG-Setup.exe`** | Text chat + browser speech-to-text + OS (SAPI) text-to-speech | You want the smaller, fastest install |
+| **`ACTIG-Setup-voice.exe`** | Bundles the **offline voice stack** (faster-whisper STT, Piper TTS, openWakeWord) | You want on-device/offline voice + the custom wake word |
+
+> The voice build downloads the Whisper model on first run; drop Piper voices and the trained
+> `wake_up_actig` model into `assets/` (see [`assets/README.md`](assets/README.md)) for a fully
+> offline wake word. You can also get either exe from **Actions → latest run → Artifacts**.
 
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
