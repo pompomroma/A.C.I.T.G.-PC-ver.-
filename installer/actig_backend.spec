@@ -3,9 +3,16 @@
 # the lazily-loaded optional stacks so a packaged build can use voice + Windows control.
 
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 
 block_cipher = None
+
+# SPECPATH is injected by PyInstaller = the directory containing this spec (installer/).
+# Resolve the entry shim and the backend source dir absolutely so the build works no matter
+# what directory PyInstaller is invoked from.
+ENTRY = os.path.join(SPECPATH, "actig_core_entry.py")
+BACKEND = os.path.abspath(os.path.join(SPECPATH, "..", "backend"))
 
 hidden = [
     "actig.server",
@@ -22,8 +29,8 @@ if sys.platform == "win32":
     hidden += ["win32com", "win32com.client", "uiautomation", "pywinauto"]
 
 a = Analysis(
-    ["actig_core_entry.py"],
-    pathex=["backend"],
+    [ENTRY],
+    pathex=[BACKEND],
     binaries=[],
     datas=[],
     hiddenimports=hidden,

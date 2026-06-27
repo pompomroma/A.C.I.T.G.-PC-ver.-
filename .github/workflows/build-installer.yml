@@ -1,0 +1,68 @@
+name: Build ACTIG installer
+
+# Produces the single-file deliverable `ACTIG-Setup.exe`.
+# After a run finishes, download it from the run's "Artifacts" section (no local toolchain
+# needed). Tagging a release also attaches the exe to the GitHub Release.
+
+on:
+  push:
+    branches: ["claude/local-agentic-ai-pc-td4621", "main"]
+  workflow_dispatch:
+  release:
+    types: [created]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend (dev)
+        run: pip install -e "backend[dev]"
+      - name: Run tests
+        run: pytest backend -q
+
+  build-windows:
+    runs-on: windows-latest
+    needs: test-backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install pnpm
+        run: npm install -g pnpm@9
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up MSVC (for the native wallpaper helper)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build native wallpaper helper
+        shell: pwsh
+        run: pwsh installer/native/build-native.ps1
+        continue-on-error: true
+
+      - name: Build installer (ACTIG-Setup.exe)
+        shell: pwsh
+        env:
+          ACTIG_WITH_VOICE: "0" # set to "1" to bundle the on-device voice stack
+        run: node installer/build.mjs
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACTIG-Setup
+          path: installer/output/ACTIG-Setup.exe
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/output/ACTIG-Setup.exe

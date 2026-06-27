@@ -1,14 +1,21 @@
 #!/usr/bin/env node
 /**
- * One-command packaging pipeline → produces a single `ACTIG-Setup.exe` (requirement:
- * "make the AI input-able to pc as file"). Steps:
+ * One-command packaging pipeline → produces a single `installer/output/ACTIG-Setup.exe`
+ * (requirement: "make the AI input-able to pc as file").
  *
- *   1. Build the shared protocol + the Electron renderer/main/preload (electron-vite).
- *   2. Freeze the Python agent core into a standalone exe with PyInstaller.
- *   3. Stage the frozen core + native wallpaper helper for electron-builder's extraResources.
- *   4. Run electron-builder (NSIS) to emit installer/output/ACTIG-Setup.exe.
+ * It is self-contained: it installs JS + Python build deps itself, so on a Windows machine
+ * with just Node, Python 3.11 and pnpm you can run:
  *
- * Run on Windows for a Windows installer: `node installer/build.mjs`.
+ *     node installer/build.mjs
+ *
+ * Steps: install deps → build shared+renderer → freeze the Python core (PyInstaller) →
+ * stage frozen core + native helper → electron-builder (NSIS) → verify the .exe exists.
+ *
+ * Env toggles:
+ *   ACTIG_WITH_VOICE=1   also bundle the on-device voice stack (whisper/piper/openwakeword).
+ *                        Off by default so the build is fast/robust; without it ACTIG still
+ *                        does text + browser speech + OS (SAPI) TTS, just no custom wake word.
+ *   PYTHON=...           python executable to use (default: python).
  */
 import { execSync } from "node:child_process";
 import { mkdirSync, rmSync, cpSync, existsSync } from "node:fs";
@@ -17,31 +24,71 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const staging = join(root, "installer", "staging");
-const run = (cmd, cwd = root) => {
-  console.log(`\n$ ${cmd}`);
-  execSync(cmd, { cwd, stdio: "inherit" });
-};
+const output = join(root, "installer", "output");
+const PY = process.env.PYTHON || "python";
+const withVoice = process.env.ACTIG_WITH_VOICE === "1";
 
-// 0. clean staging
+function run(cmd, { cwd = root, optional = false } = {}) {
+  console.log(`\n$ ${cmd}`);
+  try {
+    execSync(cmd, { cwd, stdio: "inherit" });
+    return true;
+  } catch (err) {
+    if (optional) {
+      console.warn(`⚠ optional step failed (continuing): ${cmd}`);
+      return false;
+    }
+    throw err;
+  }
+}
+
+// 0. clean staging / ensure output dir
 rmSync(staging, { recursive: true, force: true });
 mkdirSync(join(staging, "backend"), { recursive: true });
 mkdirSync(join(staging, "native"), { recursive: true });
+mkdirSync(output, { recursive: true });
 
-// 1. frontend
-run("pnpm --filter @actig/shared build");
-run("pnpm --filter @actig/desktop build");
+// 1. JS deps + shared protocol build
+run("pnpm install");
+run("pnpm --filter @actig/shared build", { optional: true });
 
-// 2. freeze backend
-run("pip install -e backend[voice,windows,web]");
-run("pyinstaller --noconfirm installer/actig_backend.spec");
-cpSync(join(root, "dist", "actig-core"), join(staging, "backend"), { recursive: true });
+// 2. Python build deps + freeze the agent core
+run(`${PY} -m pip install --upgrade pip`);
+run(`${PY} -m pip install pyinstaller`);
+const extras = withVoice ? "voice,windows,web" : "windows,web";
+// On non-Windows dev machines the [windows] extra resolves to nothing (markers), which is
+// fine — you just can't produce a *Windows* exe off Windows; use CI for that.
+run(`${PY} -m pip install -e "backend[${extras}]"`);
+run(`${PY} -m PyInstaller --noconfirm installer/actig_backend.spec`);
 
-// 3. native wallpaper helper (prebuilt or compiled by build-native.ps1)
+const frozen = join(root, "dist", "actig-core");
+if (!existsSync(frozen)) {
+  console.error("✗ PyInstaller did not produce dist/actig-core — aborting.");
+  process.exit(1);
+}
+cpSync(frozen, join(staging, "backend"), { recursive: true });
+
+// 3. native wallpaper helper (built by installer/native/build-native.ps1; optional)
 const helper = join(root, "installer", "native", "wallpaper-host.exe");
-if (existsSync(helper)) cpSync(helper, join(staging, "native", "wallpaper-host.exe"));
-else console.warn("⚠ wallpaper-host.exe not found — run installer/native/build-native.ps1 first.");
+if (existsSync(helper)) {
+  cpSync(helper, join(staging, "native", "wallpaper-host.exe"));
+} else {
+  console.warn(
+    "⚠ wallpaper-host.exe not found — live-wallpaper mode will be unavailable.\n" +
+      "  Build it with: pwsh installer/native/build-native.ps1",
+  );
+}
 
-// 4. installer
+// 4. electron-builder → NSIS installer
 run("pnpm --filter @actig/desktop package");
 
-console.log("\n✅ Built installer/output/ACTIG-Setup.exe");
+// 5. verify the deliverable
+const exe = join(output, "ACTIG-Setup.exe");
+if (existsSync(exe)) {
+  console.log(`\n✅ Built ${exe}`);
+} else {
+  console.error(
+    `\n✗ Expected ${exe} but it was not produced. Check the electron-builder output above.`,
+  );
+  process.exit(1);
+}

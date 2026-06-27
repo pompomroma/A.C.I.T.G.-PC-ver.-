@@ -13,10 +13,25 @@ your mouse or your hands — even set it as your live wallpaper.
 
 ## How to input, activate, and use ACTIG
 
-### 1. INPUT — one file
-Build (on Windows) `installer/output/ACTIG-Setup.exe` with `node installer/build.mjs`, then
-**copy that single file to the PC and double-click it.** The installer sets up autostart, so
-ACTIG launches on **every power-on**, permanently, until you uninstall it.
+### 1. INPUT — get the one file `ACTIG-Setup.exe`
+`ACTIG-Setup.exe` is a **compiled build output**, so it is not stored in the repo (a Windows
+`.exe` has to be produced by the packaging pipeline, and binaries are git-ignored). Get it in
+whichever way suits you — then **copy that single file to the PC and double-click it.** The
+installer sets up autostart, so ACTIG launches on **every power-on**, permanently, until you
+uninstall it.
+
+**A) Download it (no toolchain needed — recommended).** The GitHub Actions workflow
+[`.github/workflows/build-installer.yml`](.github/workflows/build-installer.yml) builds it on
+a Windows runner. Open the repo's **Actions tab → latest "Build ACTIG installer" run →
+Artifacts → `ACTIG-Setup`**, or download it from a tagged **Release**. Trigger a build anytime
+from Actions → "Run workflow".
+
+**B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
+**Python 3.11** installed, double-click **`build.bat`** (or run
+`scripts\build-windows.ps1`). It produces `installer\output\ACTIG-Setup.exe`.
+
+**C) Just run it from source (skip the installer entirely).** Fastest way to try it:
+`scripts\dev.ps1` launches the Electron shell, which auto-starts the Python core.
 
 ### 2. ACTIVATE
 First launch runs a one-time wizard: paste your **Claude API key** (stored encrypted), pick a

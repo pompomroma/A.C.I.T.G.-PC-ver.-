@@ -1,0 +1,42 @@
+<#
+  Turnkey local build of ACTIG-Setup.exe on Windows.
+  Checks prerequisites, installs pnpm if missing, builds the native helper, then runs the
+  packaging pipeline. Result: installer\output\ACTIG-Setup.exe
+
+  Usage (from the repo root):
+    powershell -ExecutionPolicy Bypass -File scripts\build-windows.ps1
+  or just double-click  build.bat
+#>
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+Set-Location $root
+
+function Need($name, $hint) {
+  if (-not (Get-Command $name -ErrorAction SilentlyContinue)) {
+    throw "Missing prerequisite '$name'. $hint"
+  }
+}
+
+Write-Host "==> Checking prerequisites..." -ForegroundColor Cyan
+Need node   "Install Node.js 20+ from https://nodejs.org"
+Need python "Install Python 3.11 from https://python.org and check 'Add to PATH'"
+
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+  Write-Host "==> Installing pnpm..." -ForegroundColor Cyan
+  npm install -g pnpm@9
+}
+
+Write-Host "==> Building native wallpaper helper (optional)..." -ForegroundColor Cyan
+try { & "$root\installer\native\build-native.ps1" } catch { Write-Warning "Skipped: $_" }
+
+# Set ACTIG_WITH_VOICE=1 before running this script to bundle the on-device voice stack.
+Write-Host "==> Running packaging pipeline..." -ForegroundColor Cyan
+node installer\build.mjs
+
+$exe = Join-Path $root "installer\output\ACTIG-Setup.exe"
+if (Test-Path $exe) {
+  Write-Host "`n✅ Done: $exe" -ForegroundColor Green
+  Write-Host "Copy that file to any Windows PC and double-click it to install ACTIG."
+} else {
+  throw "Build finished but $exe was not produced."
+}
