@@ -50,6 +50,29 @@ Downloads subfolder.)
 # Never try to code-sign on a personal machine (no certificate) — it only causes failures.
 $env:CSC_IDENTITY_AUTO_DISCOVERY = "false"
 
+# Antivirus commonly quarantines NSIS's makensis.exe (a known false positive), which surfaces
+# as "spawn ... makensis.exe ENOENT". We run elevated, so add a Windows Defender exclusion for
+# electron-builder's cache before building. Third-party AV (e.g. AhnLab V3) can't be excluded
+# programmatically — detect it and tell the user exactly what to do, or suggest build-portable.bat.
+$ebCache = Join-Path $env:LOCALAPPDATA "electron-builder\Cache"
+try {
+  Add-MpPreference -ExclusionPath $ebCache -ErrorAction Stop
+  Write-Host "==> Added Windows Defender exclusion for $ebCache" -ForegroundColor Cyan
+} catch {
+  Write-Host "(Could not add a Defender exclusion automatically — Defender may be off or managed.)"
+}
+$ahnlab = Get-Service -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -match 'V3|AhnLab' -or $_.DisplayName -match 'AhnLab|V3' }
+if ($ahnlab) {
+  Write-Warning @"
+AhnLab V3 detected. It may quarantine NSIS's makensis.exe and break this build. Either:
+  • Add a folder exclusion in V3 for:  $ebCache   then rerun build.bat; OR
+  • Use the antivirus-proof build instead: double-click  build-portable.bat
+    (produces ACTIG-portable.zip — no NSIS/makensis involved); OR
+  • Download the prebuilt installer from the repo's Releases page (v0.1.0).
+"@
+}
+
 Write-Host "==> Checking prerequisites..." -ForegroundColor Cyan
 Need node   "Install Node.js 20+ from https://nodejs.org"
 Need python "Install Python 3.11 from https://python.org and check 'Add to PATH'"
@@ -63,24 +86,31 @@ Write-Host "==> Building native wallpaper helper (optional)..." -ForegroundColor
 try { & "$root\installer\native\build-native.ps1" } catch { Write-Warning "Skipped: $_" }
 
 # Set ACTIG_WITH_VOICE=1 before running this script to bundle the on-device voice stack.
+# Set ACTIG_PORTABLE=1 (build-portable.bat) for the antivirus-proof, NSIS-free zip build.
 Write-Host "==> Running packaging pipeline..." -ForegroundColor Cyan
 node installer\build.mjs
 
-$exe = Join-Path $root "installer\output\ACTIG-Setup.exe"
-if (Test-Path $exe) {
-  Write-Host "`n✅ Done: $exe" -ForegroundColor Green
-  Write-Host "Copy that file to any Windows PC and double-click it to install ACTIG."
+if ($env:ACTIG_PORTABLE -eq "1") {
+  $artifact = Join-Path $root "installer\output\ACTIG-portable.zip"
+  $doneMsg = "Unzip it anywhere and run ACTIG.exe — it registers autostart on first launch."
+} else {
+  $artifact = Join-Path $root "installer\output\ACTIG-Setup.exe"
+  $doneMsg = "Copy that file to any Windows PC and double-click it to install ACTIG."
+}
+
+if (Test-Path $artifact) {
+  Write-Host "`n✅ Done: $artifact" -ForegroundColor Green
+  Write-Host $doneMsg
 } else {
   Write-Warning @"
-Build did not produce $exe.
-If the error mentioned 'makensis.exe ENOENT', your antivirus most likely quarantined NSIS's
-makensis.exe (a common false positive; frequent with AhnLab V3 / Windows Defender). Fix it by:
-  • Adding a folder exclusion for  $env:LOCALAPPDATA\electron-builder\Cache
-    (Windows Security -> Virus & threat protection -> Manage settings -> Exclusions),
-    and the equivalent in AhnLab V3 if installed, then run build.bat again; OR
-  • Temporarily turning off real-time protection and rerunning; OR
-  • Skipping the build entirely and downloading the prebuilt installer from the repo's
-    Releases page (v0.1.0) — it needs no local build.
+Build did not produce $artifact.
+If the error mentioned 'makensis.exe ENOENT', your antivirus quarantined NSIS's makensis.exe
+(a common false positive; frequent with AhnLab V3 / Windows Defender). Fix it by ONE of:
+  • Run the antivirus-proof build instead: double-click  build-portable.bat
+    (produces ACTIG-portable.zip — no NSIS/makensis at all); OR
+  • Add a folder exclusion for  $env:LOCALAPPDATA\electron-builder\Cache
+    (Windows Security -> Virus & threat protection -> Exclusions; same in AhnLab V3), then rerun; OR
+  • Download the prebuilt installer from the repo's Releases page (v0.1.0) — no local build needed.
 "@
-  throw "Build finished but $exe was not produced."
+  throw "Build finished but $artifact was not produced."
 }

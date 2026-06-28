@@ -50,11 +50,17 @@ the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two v
 `scripts\dev.ps1` launches the Electron shell, which auto-starts the Python core.
 
 #### Local-build troubleshooting
-- **`makensis.exe ENOENT`** — a previous failed run left a half-extracted electron-builder
-  cache, or your antivirus quarantined NSIS's `makensis.exe` (a notorious false positive, common
-  with AhnLab V3 / Defender). `build.bat` now **auto-clears the cache** before packaging; if it
-  still happens, add a folder exclusion for `%LOCALAPPDATA%\electron-builder\Cache` (Windows
-  Security → Virus & threat protection → Exclusions) and rerun — or just use the prebuilt exe.
+- **`makensis.exe ENOENT`** — your antivirus quarantined NSIS's `makensis.exe` (a notorious false
+  positive, common with **AhnLab V3** / Windows Defender), or a previous run left a half-extracted
+  cache. `build.bat` now **auto-clears the cache** and **auto-adds a Windows Defender exclusion**
+  for `%LOCALAPPDATA%\electron-builder\Cache`. If it still happens (e.g. AhnLab V3, which can't be
+  excluded automatically), do one of:
+  - **Easiest: run `build-portable.bat`** — an **antivirus-proof** build that produces
+    `ACTIG-portable.zip` using electron-builder's ZIP target, so it **never touches `makensis.exe`**.
+    Unzip it anywhere and run `ACTIG.exe`; it registers autostart on first launch.
+  - Add a folder exclusion for `%LOCALAPPDATA%\electron-builder\Cache` in AhnLab V3 (or disable
+    real-time protection briefly), then rerun `build.bat`.
+  - Or just download the prebuilt installer (top of this section) — no local build at all.
 - **"deprecated subdependencies" warning** (`glob`, `inflight`, `tar`, `boolean`) — **harmless,
   ignore it.** These are build-time-only transitive deps of `electron-builder` itself; they are
   **not** part of ACTIG and ship nothing into the installer or app. They can't be removed without

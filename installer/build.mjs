@@ -27,6 +27,10 @@ const staging = join(root, "installer", "staging");
 const output = join(root, "installer", "output");
 const PY = process.env.PYTHON || "python";
 const withVoice = process.env.ACTIG_WITH_VOICE === "1";
+// Portable mode builds the electron-builder `zip` target instead of NSIS. It needs no
+// makensis.exe, so antivirus that quarantines makensis can't block it. The user unzips and
+// runs ACTIG.exe, which self-registers autostart on first launch.
+const portable = process.env.ACTIG_PORTABLE === "1";
 
 function run(cmd, { cwd = root, optional = false } = {}) {
   console.log(`\n$ ${cmd}`);
@@ -100,28 +104,51 @@ if (!process.env.CI && process.platform === "win32" && process.env.LOCALAPPDATA)
 // Never attempt code-signing on a personal PC (no cert) — it only causes failures.
 process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
 try {
-  run("pnpm --filter @actig/desktop package");
+  if (portable) {
+    // NSIS-free: build the zip target directly (bypasses the `package` script's nsis default).
+    run("pnpm --filter @actig/desktop exec electron-vite build");
+    run("pnpm --filter @actig/desktop exec electron-builder --win zip --publish never");
+  } else {
+    run("pnpm --filter @actig/desktop package");
+  }
 } catch (err) {
   console.error(
-    "\n✗ electron-builder failed. The two common causes on a personal PC are:\n" +
+    "\n✗ electron-builder failed. Common causes on a personal PC:\n" +
       `  1. PATH TOO LONG — this project is at:\n       ${root}\n` +
-      "     electron-builder unpacks deep node_modules/win-unpacked paths that exceed\n" +
-      "     Windows' 260-char limit. Move the project to a SHORT path like C:\\ACTIG and retry.\n" +
-      "  2. NETWORK — on first run electron-builder downloads Electron + NSIS from GitHub.\n" +
-      "     Check your internet/proxy and run it again.\n" +
-      "\n  Easiest alternative: skip building and download the prebuilt ACTIG-Setup.exe from\n" +
-      "  the repo's Releases page (the 'ACTIG latest build' release).\n",
+      "     Move it to a SHORT path like C:\\ACTIG (no spaces/parentheses) and retry.\n" +
+      "  2. ANTIVIRUS quarantined NSIS's makensis.exe ('makensis.exe ENOENT'). Run the\n" +
+      "     antivirus-proof build instead: double-click build-portable.bat (makes a zip,\n" +
+      "     no NSIS), or add a Defender/AhnLab exclusion for the electron-builder cache.\n" +
+      "  3. NETWORK — first run downloads Electron + NSIS from GitHub; check your connection.\n" +
+      "\n  Easiest of all: download the prebuilt ACTIG-Setup.exe from the repo's Releases page.\n",
   );
   throw err;
 }
 
 // 5. verify the deliverable
-const exe = join(output, "ACTIG-Setup.exe");
-if (existsSync(exe)) {
-  console.log(`\n✅ Built ${exe}`);
+if (portable) {
+  // win.artifactName in electron-builder.yml is `ACTIG-Setup.${ext}`, so the zip target
+  // produces ACTIG-Setup.zip. Rename it to ACTIG-portable.zip for clarity.
+  const builtZip = join(output, "ACTIG-Setup.zip");
+  const finalZip = join(output, "ACTIG-portable.zip");
+  if (existsSync(builtZip)) {
+    rmSync(finalZip, { force: true });
+    cpSync(builtZip, finalZip);
+    console.log(
+      `\n✅ Built ${finalZip}\n   Unzip it and run ACTIG.exe — it registers autostart on first launch.`,
+    );
+  } else {
+    console.error(`\n✗ Expected ${builtZip} but it was not produced.`);
+    process.exit(1);
+  }
 } else {
-  console.error(
-    `\n✗ Expected ${exe} but it was not produced. Check the electron-builder output above.`,
-  );
-  process.exit(1);
+  const exe = join(output, "ACTIG-Setup.exe");
+  if (existsSync(exe)) {
+    console.log(`\n✅ Built ${exe}`);
+  } else {
+    console.error(
+      `\n✗ Expected ${exe} but it was not produced. Check the electron-builder output above.`,
+    );
+    process.exit(1);
+  }
 }
