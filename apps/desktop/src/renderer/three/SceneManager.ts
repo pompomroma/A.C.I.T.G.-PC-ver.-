@@ -291,7 +291,7 @@ export class SceneManager {
 
   private animate = (): void => {
     requestAnimationFrame(this.animate);
-    for (const o of this.objects) o.rotation.y += 0.0015; // gentle idle spin
+    // Objects stay still until the user/AI moves them (drag, scroll-scale, gestures, clone).
     this.renderer.render(this.scene, this.camera);
   };
 }

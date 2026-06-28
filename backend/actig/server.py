@@ -98,6 +98,29 @@ class Connection:
         result = await self.loop.run(ui, emit=self.emit, confirm=self.confirm)
         await self.send("assistant_message", result)
 
+    async def brain_status(self, message: str | None = None) -> StatusPayload:
+        """Report whether a reasoning provider is reachable, so the UI can prompt for a key."""
+        brain = self.loop.brain
+        try:
+            cloud_ok = await brain.cloud.available()
+        except Exception:
+            cloud_ok = False
+        try:
+            local_ok = await brain.local.available()
+        except Exception:
+            local_ok = False
+        ready = cloud_ok or local_ok
+        if message is None:
+            message = (
+                "Brain ready." if ready else
+                "No brain configured — add a Claude API key or start Ollama to get replies."
+            )
+        return StatusPayload(
+            ok=ready,
+            components=StatusComponents(brain="ready" if ready else "down", system="ready"),
+            message=message,
+        )
+
 
 @app.on_event("startup")
 async def _startup() -> None:
@@ -148,6 +171,20 @@ async def _dispatch(conn: Connection, msg: Envelope) -> None:
         asyncio.create_task(conn.handle_user_input(p))
     elif t == "confirm_response":
         conn.resolve_confirm(p.get("callId", ""), bool(p.get("approved")))
+    elif t == "set_secret":
+        # Store a credential (e.g. the Claude API key) in the encrypted secret store so the
+        # hybrid brain has a provider. Lets the user configure ACTIG from the overlay.
+        from .config.secrets import SecretStore
+
+        key = str(p.get("key", "")).strip()
+        value = str(p.get("value", "")).strip()
+        if key and value:
+            SecretStore().set(key, value)
+            await conn.send("status", await conn.brain_status("Saved. Brain is ready."))
+        else:
+            await conn.send("error", {"code": "bad_secret", "message": "Missing key/value."})
+    elif t == "get_status":
+        await conn.send("status", await conn.brain_status())
     elif t == "interrupt":
         # barge-in: nothing to cancel server-side for text; voice manager handles audio
         await conn.send("tts_state", {"state": "stopped"})
@@ -166,7 +203,11 @@ def main() -> None:
     import uvicorn
 
     s = get_settings()
-    uvicorn.run("actig.server:app", host=s.host, port=s.port, log_level="info")
+    # Pass the app OBJECT (not the "module:app" string). The string form re-imports the module,
+    # which fails inside a PyInstaller-frozen exe — that left the agent core dead so the UI never
+    # got replies. Initialise the DB up front too (no reloader in a frozen build).
+    init_db()
+    uvicorn.run(app, host=s.host, port=s.port, log_level="info")
 
 
 if __name__ == "__main__":

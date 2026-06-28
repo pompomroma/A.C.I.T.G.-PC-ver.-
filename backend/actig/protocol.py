@@ -36,6 +36,9 @@ MessageType = Literal[
     "project3d",
     "wallpaper",
     "camera_gesture",
+    "set_secret",
+    "get_status",
+    "audio_input",
     "error",
 ]
 

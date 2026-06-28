@@ -43,6 +43,10 @@ export type MessageType =
   | "project3d" // either direction: open/close/command the 3D space
   | "wallpaper" // either direction: enable/disable 3D-as-wallpaper
   | "camera_gesture" // either direction: enable/disable camera hand-tracking
+  // ── config / brain ───────────────────────────────────────────────────
+  | "set_secret" // ui->core: store an encrypted secret (e.g. Claude API key)
+  | "get_status" // ui->core: ask whether a reasoning brain is configured
+  | "audio_input" // ui->core: base64 audio for backend STT (voice build)
   // ── errors ───────────────────────────────────────────────────────────
   | "error";
 

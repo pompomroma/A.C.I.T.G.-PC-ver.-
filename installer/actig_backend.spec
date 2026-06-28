@@ -18,12 +18,22 @@ hidden = [
     "actig.server",
     "uvicorn.logging",
     "uvicorn.loops.auto",
+    "uvicorn.loops.asyncio",
     "uvicorn.protocols.http.auto",
+    "uvicorn.protocols.http.h11_impl",
     "uvicorn.protocols.websockets.auto",
+    "uvicorn.protocols.websockets.websockets_impl",
     "uvicorn.lifespan.on",
+    "websockets",
+    "websockets.legacy",
+    "websockets.legacy.server",
+    "anyio",
     "anthropic",
     "ollama",
     "langdetect",
+    # frozen SQLAlchemy commonly misses these → "no such module sqlite"/comparator errors
+    "sqlalchemy.dialects.sqlite",
+    "sqlalchemy.sql.default_comparator",
 ]
 if sys.platform == "win32":
     hidden += ["win32com", "win32com.client", "uiautomation", "pywinauto"]

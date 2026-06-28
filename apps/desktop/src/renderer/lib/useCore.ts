@@ -27,6 +27,24 @@ export interface VoiceState {
   listening: boolean;
 }
 
+export interface BrainStatus {
+  ready: boolean;
+  message?: string;
+}
+
+/** Speak text with the browser TTS (works in Electron, needs no backend voice stack). */
+function speak(text: string, lang = "en", muted = false): void {
+  if (muted || !text?.trim() || !("speechSynthesis" in window)) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = lang.includes("-") ? lang : `${lang}-${lang.toUpperCase()}`;
+    window.speechSynthesis.cancel(); // interrupt any prior utterance (barge-in friendly)
+    window.speechSynthesis.speak(u);
+  } catch {
+    /* ignore TTS failures */
+  }
+}
+
 /**
  * Central hook for any hologram surface. Subscribes to core→UI messages and exposes a small
  * imperative API. Every function in the app (text or voice, requirement 14) flows through
@@ -41,11 +59,15 @@ export function useCore() {
     listening: false,
   });
   const [awake, setAwake] = useState(false);
+  const [brain, setBrain] = useState<BrainStatus>({ ready: false });
   const idRef = useRef(0);
   const nextId = () => `l${idRef.current++}`;
+  // ref so the message handler (bound once) always sees the current speaker-mute state
+  const speakerMuted = useRef(false);
+  speakerMuted.current = voice.aiSpeakerMuted;
 
   useEffect(() => {
-    return window.actig.onMessage((msg) => {
+    const unsub = window.actig.onMessage((msg) => {
       const p = msg.payload || {};
       switch (msg.type) {
         case "assistant_message":
@@ -64,6 +86,7 @@ export function useCore() {
               recommendations: p.recommendations,
             },
           ]);
+          speak(p.text, p.lang || "en", speakerMuted.current); // AI speaks its reply (req 2)
           break;
         case "confirm_request":
           setConfirm({
@@ -76,14 +99,21 @@ export function useCore() {
         case "voice_state":
           setVoice((v) => ({ ...v, ...p }));
           break;
+        case "status":
+          setBrain({ ready: !!p.ok, message: p.message });
+          break;
         case "wake":
           setAwake(true);
+          if (p.greet) speak("ACTIG at your service sir", "en", speakerMuted.current); // req 7
           break;
         case "sleep":
           setAwake(false);
           break;
       }
     });
+    // ask the core whether a brain is configured, so the UI can prompt for a key
+    window.actig.send("get_status", {});
+    return unsub;
   }, []);
 
   const sendInput = useCallback((text: string, source: "text" | "voice" = "text") => {
@@ -105,11 +135,34 @@ export function useCore() {
     (which: "userMicMuted" | "aiSpeakerMuted", value: boolean) => {
       setVoice((v) => ({ ...v, [which]: value }));
       window.actig.send("voice_state", { [which]: value });
+      if (which === "aiSpeakerMuted" && value && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel(); // muting also stops current speech
+      }
     },
     [],
   );
 
-  const interrupt = useCallback(() => window.actig.send("interrupt", {}), []);
+  const interrupt = useCallback(() => {
+    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    window.actig.send("interrupt", {});
+  }, []);
 
-  return { lines, confirm, voice, awake, sendInput, respondConfirm, setMute, interrupt, setAwake };
+  /** Save the Claude API key (or other secret) to the encrypted backend store. */
+  const setSecret = useCallback((key: string, value: string) => {
+    window.actig.send("set_secret", { key, value });
+  }, []);
+
+  return {
+    lines,
+    confirm,
+    voice,
+    awake,
+    brain,
+    sendInput,
+    respondConfirm,
+    setMute,
+    interrupt,
+    setAwake,
+    setSecret,
+  };
 }

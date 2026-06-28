@@ -57,6 +57,9 @@ export function App() {
         ⚡
       </div>
 
+      {/* When no reasoning provider is configured, prompt for a Claude key so ACTIG can reply. */}
+      {!core.brain.ready && <BrainGate onSave={(k) => core.setSecret("ANTHROPIC_API_KEY", k)} />}
+
       <Chatbox lines={core.lines} onSend={(t) => core.sendInput(t, "text")} />
 
       <HoloBar
@@ -78,5 +81,43 @@ export function App() {
         />
       )}
     </>
+  );
+}
+
+/** One-time prompt to connect a brain (Claude API key) so ACTIG can actually reply. */
+function BrainGate({ onSave }: { onSave: (key: string) => void }) {
+  const [key, setKey] = useState("");
+  const [saved, setSaved] = useState(false);
+  return (
+    <div className="confirm holo" data-interactive style={{ top: "8%" }}>
+      <div className="risk">connect a brain</div>
+      <h3>ACTIG needs a reasoning model to reply</h3>
+      <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+        Paste your <b>Claude API key</b> (stored encrypted on this PC), or install{" "}
+        <b>Ollama</b> + run <code>ollama pull llama3.1:8b</code> for a free local brain.
+      </div>
+      <form
+        className="chat-input"
+        style={{ marginTop: 10 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (key.trim()) {
+            onSave(key.trim());
+            setSaved(true);
+          }
+        }}
+      >
+        <input
+          type="password"
+          value={key}
+          placeholder="sk-ant-…"
+          onChange={(e) => setKey(e.target.value)}
+        />
+        <button className="approve" type="submit">
+          Save
+        </button>
+      </form>
+      {saved && <div className="meta">Saved — try sending a message.</div>}
+    </div>
   );
 }
