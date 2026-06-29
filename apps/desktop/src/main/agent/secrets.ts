@@ -1,9 +1,10 @@
 import { app, safeStorage } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 
 /**
- * Encrypted secret store for the in-process agent (e.g. the Claude API key).
+ * Encrypted secret store for the in-process agent (e.g. the NVIDIA API key).
  *
  * Secrets live in `userData/secrets.json`, each value encrypted with Electron's
  * `safeStorage` (Windows DPAPI / macOS Keychain / libsecret). If OS encryption is
@@ -64,5 +65,25 @@ export function hasSecret(key: string): boolean {
   return !!readAll()[key];
 }
 
-/** Canonical key name for the Claude API key, used across the agent. */
-export const CLAUDE_KEY = "ANTHROPIC_API_KEY";
+/** Canonical key name for the NVIDIA API key, used across the agent. */
+export const API_KEY_NAME = "NVIDIA_API_KEY";
+
+/**
+ * Resolve the API key WITHOUT ever storing it in the repo. Order:
+ *   1. a key the user pasted (encrypted in `userData/secrets.json`),
+ *   2. the `ACTIG_API_KEY` environment variable,
+ *   3. a `~/.actig/api_key` file (one line) the user drops once.
+ * This lets ACTIG run with no in-app typing while keeping the secret on the user's machine.
+ */
+export function resolveApiKey(): string {
+  const stored = getSecret(API_KEY_NAME);
+  if (stored) return stored;
+  if (process.env.ACTIG_API_KEY?.trim()) return process.env.ACTIG_API_KEY.trim();
+  try {
+    const f = join(homedir(), ".actig", "api_key");
+    if (existsSync(f)) return readFileSync(f, "utf8").trim();
+  } catch {
+    /* ignore */
+  }
+  return "";
+}

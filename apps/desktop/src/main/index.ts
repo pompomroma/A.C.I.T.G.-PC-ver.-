@@ -18,7 +18,7 @@ import { AgentService } from "./agent/service";
  * (hidden) hologram overlay, installs the tray + emergency-wake affordances + global wake
  * hotkey, and bridges messages between every renderer surface and the agent.
  *
- * The reasoning brain (Claude) now runs inside this main process (`./agent/*`), so chat works
+ * The reasoning brain (NVIDIA Nemotron) now runs inside this main process (`./agent/*`), so chat works
  * with no separate Python process to start, crash, or be quarantined by antivirus.
  */
 

@@ -22,19 +22,18 @@ uninstall it.
 
 **A) Download the prebuilt installer (no toolchain, no building — recommended).** GitHub
 Actions builds the installers on a Windows runner and publishes them to **Releases** — both
-the versioned **`v0.2.0`** release and a rolling **"ACTIG latest build"**. Two variants:
+the versioned **`v0.3.0`** release and a rolling **"ACTIG latest build"**. Two variants:
 
 | Asset | Includes | Pick this if |
 |---|---|---|
-| **`ACTIG-Setup.exe`** | Everything the assistant needs: in-app **Claude** brain, **local Whisper** speech-to-text + wake word, natural text-to-speech | **Recommended** — the standard build now does full voice + chat on its own |
+| **`ACTIG-Setup.exe`** | Everything the assistant needs: in-app **NVIDIA Nemotron** brain, **local Whisper** speech-to-text + wake word, natural text-to-speech | **Recommended** — the standard build does full voice + chat on its own |
 | **`ACTIG-Setup-voice.exe`** | Also bundles the legacy offline Python voice stack (faster-whisper, Piper, openWakeWord) | You specifically want the fully-offline Python voice models in `assets/` |
 
-> **v0.2.0 — the brain runs inside the app.** ACTIG now talks to Claude directly from the
-> desktop app (you paste your key on first launch) and does speech recognition locally with
-> Whisper in the app itself, so **chat and voice work with no separate background process** —
-> the old "the AI never replies" failures are gone. The Whisper model (~40 MB) downloads once on
-> first voice use and is then cached. You can also get either exe from
-> **Actions → latest run → Artifacts**.
+> **v0.3.0 — the brain runs inside the app, powered by NVIDIA Nemotron.** ACTIG calls NVIDIA's
+> hosted Nemotron model directly from the desktop app and does speech recognition locally with
+> Whisper, so **chat and voice work with no separate background process** — the old "the AI
+> never replies" failures are gone. The Whisper model (~40 MB) downloads once on first voice use
+> and is then cached. You can also get either exe from **Actions → latest run → Artifacts**.
 
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
@@ -72,17 +71,24 @@ the versioned **`v0.2.0`** release and a rolling **"ACTIG latest build"**. Two v
   build, the installer, or the app.
 
 ### 2. ACTIVATE
-On first launch a panel asks for your **Claude API key** (from
-[console.anthropic.com](https://console.anthropic.com)). Paste it once — it's stored
-**encrypted on your PC** (Electron `safeStorage`/DPAPI) and used to talk to Claude directly.
-ACTIG checks the key and says *"Brain connected"* when it's ready. Grant **microphone**
+ACTIG's brain is **NVIDIA Nemotron**, reached with your **NVIDIA API key** (`nvapi-…`, from
+[build.nvidia.com](https://build.nvidia.com)). So the key never has to live in the public repo,
+ACTIG reads it from your own machine in this order — provide it **once** and you never type it
+in the app again:
+
+1. a key you paste into the first-run panel (stored **encrypted** on your PC), **or**
+2. the **`ACTIG_API_KEY`** environment variable, **or**
+3. a one-line file at **`%USERPROFILE%\.actig\api_key`** (`~/.actig/api_key`).
+
+ACTIG validates the key and says *"Brain connected"* when it's ready. Grant **microphone**
 permission so voice and the wake word work. After that ACTIG lives in the tray. Wake it by
 **saying "wake up ACTIG"** (it answers *"ACTIG at your service sir"*), by tapping the
 always-visible **emergency button**, or with **Ctrl+Alt+Space**.
 
-> **Choosing the model.** ACTIG defaults to a fast, capable current Claude model. To point it
-> at a different one (e.g. an Opus build), set the `ACTIG_CLAUDE_MODEL` environment variable to
-> the model id before launch.
+> **Choosing the model.** ACTIG defaults to the Nemotron Ultra model id. To point it at a
+> different NVIDIA model, set the **`ACTIG_MODEL`** environment variable to the catalog id.
+> **Security note:** an API key is a credential — keep it in your env var / local file, not in
+> any shared repo, and rotate it if it leaks.
 
 ### 3. USE
 Talk or type — every feature works by voice **or** text on any screen: chat, run PC tasks
@@ -94,18 +100,19 @@ mic. Everything is saved to history and resumable.
 
 ## Architecture
 
-As of **v0.2.0** the reasoning brain and the agent loop run **inside the Electron main
-process** (`apps/desktop/src/main/agent/*`): it calls the Claude Messages API directly with
-`fetch`, runs the guarded tools in Node, and broadcasts replies to every hologram surface —
-no separate process is needed to reply. Speech-to-text runs locally in the renderer with
-Whisper (Transformers.js). The Python agent core remains in the repo for the offline-voice
-build and as a reference implementation, but the shipped app no longer depends on it for chat.
+As of **v0.3.0** the reasoning brain and the agent loop run **inside the Electron main
+process** (`apps/desktop/src/main/agent/*`): it calls **NVIDIA Nemotron** (NIM's OpenAI-compatible
+Chat Completions API) directly with `fetch`, runs the guarded tools in Node, and broadcasts
+replies to every hologram surface — no separate process is needed to reply. Speech-to-text runs
+locally in the renderer with Whisper (Transformers.js). The Python agent core remains in the repo
+for the offline-voice build and as a reference implementation, but the shipped app no longer
+depends on it for chat.
 
 ```
 Electron app (TypeScript/React/Three.js/MediaPipe)
   overlay (hologram chatbox, mic, emergency, confirm)   ┐
   project3d (shapes, drag, scale, clone, gestures)      │  main-process agent:
-  wallpaper (3D behind desktop icons)                   ├─ Claude client (fetch) + guarded tools
+  wallpaper (3D behind desktop icons)                   ├─ NVIDIA Nemotron client (fetch) + tools
   renderer Whisper STT + wake word + natural TTS        │  encrypted secrets + JSON-lines history
   tray + autostart + global hotkey                      ┘
 ```
@@ -152,7 +159,7 @@ Every numbered requirement from the brief maps to code:
 | 7 reaction "ACTIG at your service sir" | spoken in `lib/useCore.ts` on `wake`; `main/index.ts` `wake()` |
 | 8 emergency button | `components/App.tsx` `.emergency`, tray fallback |
 | 9 holograms over anything on wake | `main/windows.ts` (transparent always-on-top), `main/index.ts` `wake()` |
-| 10 natural conversation | in-app Claude brain `main/agent/{claude,loop}.ts`; `agent/persona.py` (reference) |
+| 10 natural conversation | in-app NVIDIA Nemotron brain `main/agent/{llm,loop}.ts`; `agent/persona.py` (reference) |
 | 11 high cognition | Whisper STT + hybrid routing + low-confidence confirm |
 | 12 voice interrupt + new reply | `voice/manager.py` `interrupt`, `lib/useCore.ts`, `App.tsx` |
 | 13 flexible commands | LLM tool-routing in `main/agent/loop.ts` + `main/agent/tools.ts` |

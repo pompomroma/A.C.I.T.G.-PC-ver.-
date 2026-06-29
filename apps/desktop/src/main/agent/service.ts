@@ -1,18 +1,18 @@
-import { ClaudeClient } from "./claude";
+import { LlmClient } from "./llm";
 import { runTurn } from "./loop";
-import { CLAUDE_KEY, getSecret, setSecret } from "./secrets";
+import { API_KEY_NAME, resolveApiKey, setSecret } from "./secrets";
 import type { AgentHost, RiskLevel, ToolContext } from "./tools";
 
 /**
  * The in-process agent service. It receives the same `{id,type,ts,payload}` envelopes the
- * renderer used to send over WebSocket to the Python core, and answers them directly — so the
- * app no longer depends on any external process to reply.
+ * renderer used to send over WebSocket to the Python core, and answers them directly with the
+ * NVIDIA Nemotron brain — so the app no longer depends on any external process to reply.
  *
  * Wire-up in main/index.ts:  ipcMain.on("core:send", (_e, frame) => agent.handle(frame));
  * It broadcasts replies back through the existing `core:message` channel via `broadcast`.
  */
 export class AgentService {
-  private client: ClaudeClient;
+  private client: LlmClient;
   private host: AgentHost | null = null;
   private pendingConfirms = new Map<string, (approved: boolean) => void>();
   private interrupted = false;
@@ -20,7 +20,7 @@ export class AgentService {
   private confirmSeq = 0;
 
   constructor(private broadcast: (msg: { type: string; payload: unknown }) => void) {
-    this.client = new ClaudeClient(getSecret(CLAUDE_KEY) || "");
+    this.client = new LlmClient(resolveApiKey());
   }
 
   setHost(host: AgentHost): void {
@@ -35,7 +35,7 @@ export class AgentService {
       payload: {
         ok: ready,
         components: { brain: ready ? "ready" : "down", system: "ready" },
-        message: message ?? (ready ? "ACTIG is ready." : "Add a Claude API key so ACTIG can reply."),
+        message: message ?? (ready ? "ACTIG is ready." : "Add an NVIDIA API key so ACTIG can reply."),
       },
     });
   }
@@ -70,22 +70,24 @@ export class AgentService {
 
   private async onSetSecret(key: string, value: string): Promise<void> {
     if (!key || !value) return;
-    setSecret(key, value);
-    if (key === CLAUDE_KEY) {
+    // Accept either the canonical name or whatever the UI sends for the API key.
+    const isApiKey = key === API_KEY_NAME || /api[_-]?key/i.test(key) || /nvapi/i.test(value);
+    setSecret(isApiKey ? API_KEY_NAME : key, value);
+    if (isApiKey) {
       this.client.setKey(value);
-      this.emitStatus("Checking your Claude API key…");
+      this.emitStatus("Checking your NVIDIA API key…");
       const err = await this.client.validate();
       if (err) {
         this.emitStatus(err);
         this.broadcast({
           type: "assistant_message",
-          payload: { text: err, lang: "en", brain: "claude", errorExplanation: err },
+          payload: { text: err, lang: "en", brain: "nemotron", errorExplanation: err },
         });
       } else {
-        this.emitStatus("Claude API key accepted — ACTIG is ready.");
+        this.emitStatus("API key accepted — ACTIG is ready.");
         this.broadcast({
           type: "assistant_message",
-          payload: { text: "Brain connected. I'm ready, sir — how can I help?", lang: "en", brain: "claude" },
+          payload: { text: "Brain connected. I'm ready, sir — how can I help?", lang: "en", brain: "nemotron" },
         });
       }
     }
@@ -98,7 +100,7 @@ export class AgentService {
       this.broadcast({
         type: "assistant_message",
         payload: {
-          text: "I don't have a brain connected yet. Paste your Claude API key in the panel above and I'll be ready.",
+          text: "I don't have a brain connected yet. Add your NVIDIA API key (panel above) and I'll be ready.",
           lang: "en",
         },
       });

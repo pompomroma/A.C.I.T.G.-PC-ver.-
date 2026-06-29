@@ -3,7 +3,7 @@
  * on WASM/WebGPU — no Google key, no Python, no cloud STT. The library is loaded from a CDN as
  * an ESM module via a Vite-ignored dynamic import so it never has to bundle into the app (which
  * would risk the build); the tiny model (~40 MB) downloads once on first use and is cached by
- * the browser. Internet is required for that first download (ACTIG needs it for Claude anyway).
+ * the browser. Internet is required for that first download (ACTIG needs it for the model anyway).
  *
  * Two entry points feed the SAME pipeline as typed text (requirement 14):
  *   - `startMic(onText)`   — push-to-talk: record until stopped, then transcribe.

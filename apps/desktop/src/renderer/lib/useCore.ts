@@ -192,7 +192,7 @@ export function useCore() {
     window.actig.send("interrupt", {});
   }, []);
 
-  /** Save the Claude API key (or other secret) to the encrypted backend store. */
+  /** Save the NVIDIA API key (or other secret) to the encrypted store. */
   const setSecret = useCallback((key: string, value: string) => {
     window.actig.send("set_secret", { key, value });
   }, []);

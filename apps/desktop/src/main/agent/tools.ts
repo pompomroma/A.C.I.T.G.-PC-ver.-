@@ -3,7 +3,14 @@ import { exec } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir, hostname, platform, release, totalmem, freemem, userInfo } from "node:os";
 import { join, resolve } from "node:path";
-import type { ToolSpec } from "./claude";
+import type { FunctionTool } from "./llm";
+
+/** JSON-schema description of a tool (provider-neutral; mapped to NVIDIA/OpenAI below). */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+}
 
 /**
  * Node implementations of ACTIG's guarded tools (requirements 13, 14, 18, 19). Each tool
@@ -337,5 +344,14 @@ export const TOOLS: AgentTool[] = [
   },
 ];
 
-export const TOOL_SPECS: ToolSpec[] = TOOLS.map((t) => t.spec);
 export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.spec.name, t]));
+
+/** Tools in NVIDIA NIM / OpenAI function-calling format. */
+export const FUNCTION_TOOLS: FunctionTool[] = TOOLS.map((t) => ({
+  type: "function",
+  function: {
+    name: t.spec.name,
+    description: t.spec.description,
+    parameters: t.spec.input_schema,
+  },
+}));

@@ -111,8 +111,8 @@ export function App() {
         </div>
       )}
 
-      {/* When no reasoning provider is configured, prompt for a Claude key so ACTIG can reply. */}
-      {!core.brain.ready && <BrainGate onSave={(k) => core.setSecret("ANTHROPIC_API_KEY", k)} />}
+      {/* When no reasoning provider is configured, prompt for an NVIDIA key so ACTIG can reply. */}
+      {!core.brain.ready && <BrainGate onSave={(k) => core.setSecret("NVIDIA_API_KEY", k)} />}
 
       <Chatbox lines={core.lines} onSend={(t) => core.sendInput(t, "text")} />
 
@@ -138,17 +138,18 @@ export function App() {
   );
 }
 
-/** One-time prompt to connect a brain (Claude API key) so ACTIG can actually reply. */
+/** One-time prompt to connect a brain (NVIDIA API key) so ACTIG can actually reply. */
 function BrainGate({ onSave }: { onSave: (key: string) => void }) {
   const [key, setKey] = useState("");
   const [saved, setSaved] = useState(false);
   return (
     <div className="confirm holo" data-interactive style={{ top: "8%" }}>
       <div className="risk">connect a brain</div>
-      <h3>ACTIG needs a Claude API key to reply</h3>
+      <h3>ACTIG needs an NVIDIA API key to reply</h3>
       <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-        Paste your <b>Claude API key</b> (from console.anthropic.com). It's stored{" "}
-        <b>encrypted on this PC</b> and used to talk to Claude directly — no other setup needed.
+        Paste your <b>NVIDIA API key</b> (<code>nvapi-…</code>, from build.nvidia.com). It's
+        stored <b>encrypted on this PC</b> and used to talk to the Nemotron model directly. Tip:
+        set <code>ACTIG_API_KEY</code> or drop it in <code>~/.actig/api_key</code> to skip this.
       </div>
       <form
         className="chat-input"
@@ -164,7 +165,7 @@ function BrainGate({ onSave }: { onSave: (key: string) => void }) {
         <input
           type="password"
           value={key}
-          placeholder="sk-ant-…"
+          placeholder="nvapi-…"
           onChange={(e) => setKey(e.target.value)}
         />
         <button className="approve" type="submit">
