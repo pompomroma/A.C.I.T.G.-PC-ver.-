@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useCore } from "../lib/useCore";
+import { startMic, startWakeWord, voiceSupported, type MicSession } from "../lib/whisper";
 import { speechSupported, startListening } from "../lib/speech";
 import { Chatbox } from "./Chatbox";
 import { HoloBar } from "./HoloBar";
@@ -15,7 +16,10 @@ import { ConfirmDialog } from "./ConfirmDialog";
 export function App() {
   const core = useCore();
   const [listening, setListening] = useState(false);
-  const stopRef = useRef<(() => void) | null>(null);
+  const [voiceStatus, setVoiceStatus] = useState("");
+  const micRef = useRef<MicSession | null>(null);
+  const legacyStopRef = useRef<(() => void) | null>(null);
+  const startingRef = useRef(false);
 
   // Toggle overlay interactivity based on what the pointer is over.
   useEffect(() => {
@@ -27,16 +31,60 @@ export function App() {
     return () => window.removeEventListener("mousemove", onMove);
   }, []);
 
+  // Always-listening wake word ("wake up ACTIG") — active whenever the user's mic isn't muted
+  // (requirement 6). The ⚡ button and Ctrl+Alt+Space remain instant alternatives.
+  useEffect(() => {
+    if (core.voice.userMicMuted || !voiceSupported()) return;
+    const stop = startWakeWord(
+      () => {
+        core.setAwake(true);
+        window.actig.send("wake", { source: "voice", greet: true });
+      },
+      (msg) => setVoiceStatus(msg),
+    );
+    return stop;
+  }, [core.voice.userMicMuted]);
+
   function toggleMic() {
+    // Second press → stop & transcribe.
     if (listening) {
-      stopRef.current?.();
-      stopRef.current = null;
+      micRef.current?.stop();
+      legacyStopRef.current?.();
+      legacyStopRef.current = null;
       setListening(false);
       return;
     }
-    if (!speechSupported()) return;
     core.interrupt(); // barge-in: stop any current speech before taking new input
-    stopRef.current = startListening((text, final) => {
+
+    if (voiceSupported()) {
+      if (startingRef.current) return;
+      startingRef.current = true;
+      setListening(true);
+      void startMic(
+        (text) => {
+          core.sendInput(text, "voice");
+          setListening(false);
+        },
+        (msg) => setVoiceStatus(msg),
+        (err) => {
+          setVoiceStatus(err);
+          setListening(false);
+          setTimeout(() => setVoiceStatus(""), 4000);
+        },
+      ).then((session) => {
+        micRef.current = session;
+        startingRef.current = false;
+      });
+      return;
+    }
+
+    // Fallback: Web Speech API where Whisper isn't available.
+    if (!speechSupported()) {
+      setVoiceStatus("Voice input isn't available on this device.");
+      setTimeout(() => setVoiceStatus(""), 4000);
+      return;
+    }
+    legacyStopRef.current = startListening((text, final) => {
       if (final) core.sendInput(text, "voice");
     });
     setListening(true);
@@ -56,6 +104,12 @@ export function App() {
       >
         ⚡
       </div>
+
+      {voiceStatus && (
+        <div className="voice-status holo" data-interactive>
+          {voiceStatus}
+        </div>
+      )}
 
       {/* When no reasoning provider is configured, prompt for a Claude key so ACTIG can reply. */}
       {!core.brain.ready && <BrainGate onSave={(k) => core.setSecret("ANTHROPIC_API_KEY", k)} />}
@@ -91,10 +145,10 @@ function BrainGate({ onSave }: { onSave: (key: string) => void }) {
   return (
     <div className="confirm holo" data-interactive style={{ top: "8%" }}>
       <div className="risk">connect a brain</div>
-      <h3>ACTIG needs a reasoning model to reply</h3>
+      <h3>ACTIG needs a Claude API key to reply</h3>
       <div style={{ fontSize: 13, lineHeight: 1.4 }}>
-        Paste your <b>Claude API key</b> (stored encrypted on this PC), or install{" "}
-        <b>Ollama</b> + run <code>ollama pull llama3.1:8b</code> for a free local brain.
+        Paste your <b>Claude API key</b> (from console.anthropic.com). It's stored{" "}
+        <b>encrypted on this PC</b> and used to talk to Claude directly — no other setup needed.
       </div>
       <form
         className="chat-input"
@@ -117,7 +171,7 @@ function BrainGate({ onSave }: { onSave: (key: string) => void }) {
           Save
         </button>
       </form>
-      {saved && <div className="meta">Saved — try sending a message.</div>}
+      {saved && <div className="meta">Checking your key… ACTIG will say when it's ready.</div>}
     </div>
   );
 }

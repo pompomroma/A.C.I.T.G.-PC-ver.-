@@ -22,16 +22,19 @@ uninstall it.
 
 **A) Download the prebuilt installer (no toolchain, no building — recommended).** GitHub
 Actions builds the installers on a Windows runner and publishes them to **Releases** — both
-the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two variants:
+the versioned **`v0.2.0`** release and a rolling **"ACTIG latest build"**. Two variants:
 
 | Asset | Includes | Pick this if |
 |---|---|---|
-| **`ACTIG-Setup.exe`** | Text chat + browser speech-to-text + OS (SAPI) text-to-speech | You want the smaller, fastest install |
-| **`ACTIG-Setup-voice.exe`** | Bundles the **offline voice stack** (faster-whisper STT, Piper TTS, openWakeWord) | You want on-device/offline voice + the custom wake word |
+| **`ACTIG-Setup.exe`** | Everything the assistant needs: in-app **Claude** brain, **local Whisper** speech-to-text + wake word, natural text-to-speech | **Recommended** — the standard build now does full voice + chat on its own |
+| **`ACTIG-Setup-voice.exe`** | Also bundles the legacy offline Python voice stack (faster-whisper, Piper, openWakeWord) | You specifically want the fully-offline Python voice models in `assets/` |
 
-> The voice build downloads the Whisper model on first run; drop Piper voices and the trained
-> `wake_up_actig` model into `assets/` (see [`assets/README.md`](assets/README.md)) for a fully
-> offline wake word. You can also get either exe from **Actions → latest run → Artifacts**.
+> **v0.2.0 — the brain runs inside the app.** ACTIG now talks to Claude directly from the
+> desktop app (you paste your key on first launch) and does speech recognition locally with
+> Whisper in the app itself, so **chat and voice work with no separate background process** —
+> the old "the AI never replies" failures are gone. The Whisper model (~40 MB) downloads once on
+> first voice use and is then cached. You can also get either exe from
+> **Actions → latest run → Artifacts**.
 
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
@@ -69,10 +72,17 @@ the versioned **`v0.1.0`** release and a rolling **"ACTIG latest build"**. Two v
   build, the installer, or the app.
 
 ### 2. ACTIVATE
-First launch runs a one-time wizard: paste your **Claude API key** (stored encrypted), pick a
-local **Ollama** model, and grant **microphone/webcam** permission. After that ACTIG lives in
-the tray. Wake it by **saying "wake up ACTIG"** (it answers *"ACTIG at your service sir"*), by
-tapping the always-visible **emergency button**, or with **Ctrl+Alt+Space**.
+On first launch a panel asks for your **Claude API key** (from
+[console.anthropic.com](https://console.anthropic.com)). Paste it once — it's stored
+**encrypted on your PC** (Electron `safeStorage`/DPAPI) and used to talk to Claude directly.
+ACTIG checks the key and says *"Brain connected"* when it's ready. Grant **microphone**
+permission so voice and the wake word work. After that ACTIG lives in the tray. Wake it by
+**saying "wake up ACTIG"** (it answers *"ACTIG at your service sir"*), by tapping the
+always-visible **emergency button**, or with **Ctrl+Alt+Space**.
+
+> **Choosing the model.** ACTIG defaults to a fast, capable current Claude model. To point it
+> at a different one (e.g. an Opus build), set the `ACTIG_CLAUDE_MODEL` environment variable to
+> the model id before launch.
 
 ### 3. USE
 Talk or type — every feature works by voice **or** text on any screen: chat, run PC tasks
@@ -84,12 +94,20 @@ mic. Everything is saved to history and resumable.
 
 ## Architecture
 
+As of **v0.2.0** the reasoning brain and the agent loop run **inside the Electron main
+process** (`apps/desktop/src/main/agent/*`): it calls the Claude Messages API directly with
+`fetch`, runs the guarded tools in Node, and broadcasts replies to every hologram surface —
+no separate process is needed to reply. Speech-to-text runs locally in the renderer with
+Whisper (Transformers.js). The Python agent core remains in the repo for the offline-voice
+build and as a reference implementation, but the shipped app no longer depends on it for chat.
+
 ```
-Electron shell (TypeScript/React/Three.js/MediaPipe)  ──WebSocket──  Python agent core
-  overlay (hologram chatbox, mic, emergency, confirm)                brain router (Ollama↔Claude)
-  project3d (shapes, drag, scale, clone, gestures)                   agent loop + guarded tools
-  wallpaper (3D behind desktop icons)                                voice (wake/STT/TTS/VAD)
-  tray + autostart + global hotkey + backend watchdog               history + checkpoints (SQLite)
+Electron app (TypeScript/React/Three.js/MediaPipe)
+  overlay (hologram chatbox, mic, emergency, confirm)   ┐
+  project3d (shapes, drag, scale, clone, gestures)      │  main-process agent:
+  wallpaper (3D behind desktop icons)                   ├─ Claude client (fetch) + guarded tools
+  renderer Whisper STT + wake word + natural TTS        │  encrypted secrets + JSON-lines history
+  tray + autostart + global hotkey                      ┘
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) and [`docs/security.md`](docs/security.md).
@@ -126,24 +144,24 @@ Every numbered requirement from the brief maps to code:
 | 1 explanations 2-1..2-4, options(3), recommendations(4) | `backend/actig/protocol.py` `AssistantMessagePayload`, `agent/schema.py`, UI `components/Chatbox.tsx` |
 | 1 checkpoints | `backend/actig/history/checkpoints.py` |
 | 1 language switch | `backend/actig/lang/detect.py`, used in `agent/loop.py` |
-| 2 text+voice I/O | `components/Chatbox.tsx`, `lib/speech.ts`, `backend/actig/voice/*` |
-| 3 always-on background | `main/backend.ts` watchdog, tray, `main/index.ts` |
+| 2 text+voice I/O | `components/Chatbox.tsx`, local Whisper STT `lib/whisper.ts`, natural TTS `lib/useCore.ts` |
+| 3 always-on background | tray + `main/index.ts` (in-process agent, no child process to watch) |
 | 4 3D drag/scale/clone (mouse+camera) | `three/SceneManager.ts`, `three/gestures.ts` |
 | 5 holograms (chatbox/mic/3D btn/in-3D buttons) | `components/*`, `project3d.ts`, `styles/hologram.css` |
-| 6 wake "wake up ACTIG" | `backend/actig/voice/wakeword.py` |
-| 7 reaction "ACTIG at your service sir" | `voice/tts.py` `speak_reaction`, settings `wake_reaction` |
+| 6 wake "wake up ACTIG" | local Whisper wake loop `lib/whisper.ts` `startWakeWord`; `voice/wakeword.py` (offline build) |
+| 7 reaction "ACTIG at your service sir" | spoken in `lib/useCore.ts` on `wake`; `main/index.ts` `wake()` |
 | 8 emergency button | `components/App.tsx` `.emergency`, tray fallback |
 | 9 holograms over anything on wake | `main/windows.ts` (transparent always-on-top), `main/index.ts` `wake()` |
-| 10 natural conversation | `agent/persona.py`, Claude brain |
+| 10 natural conversation | in-app Claude brain `main/agent/{claude,loop}.ts`; `agent/persona.py` (reference) |
 | 11 high cognition | Whisper STT + hybrid routing + low-confidence confirm |
 | 12 voice interrupt + new reply | `voice/manager.py` `interrupt`, `lib/useCore.ts`, `App.tsx` |
-| 13 flexible commands | LLM tool-routing in `agent/loop.py` + `agent/tools.py` |
-| 14 every function via voice AND text | single pipeline in `lib/useCore.ts` → `agent/loop.py` |
+| 13 flexible commands | LLM tool-routing in `main/agent/loop.ts` + `main/agent/tools.ts` |
+| 14 every function via voice AND text | single pipeline in `lib/useCore.ts` → `main/agent/service.ts` |
 | 15 voice+text on any tab | global hotkey + wake word + always-on-top overlay |
-| 16 bring up 3D by voice/text | `project3d.ts` command relay, `main/index.ts` |
-| 17 3D as wallpaper | `main/wallpaper.ts`, `installer/native/wallpaper-host.c`, `wallpaper.ts` |
-| 18 play music via web | `backend/actig/system/browser.py` `play_music` |
-| 19 full guarded PC access | `backend/actig/system/*`, `config/capabilities.py`, `agent/tools.py` |
+| 16 bring up 3D by voice/text | `open_3d_project` tool in `main/agent/tools.ts` → `main/index.ts` |
+| 17 3D as wallpaper | `set_wallpaper` tool → `main/wallpaper.ts`, `installer/native/wallpaper-host.c` |
+| 18 play music via web | `play_music` tool in `main/agent/tools.ts` (YouTube Music) |
+| 19 full guarded PC access | `main/agent/tools.ts` (files/apps/settings/commands) + risk gating in `loop.ts` |
 
 ## License
 MIT

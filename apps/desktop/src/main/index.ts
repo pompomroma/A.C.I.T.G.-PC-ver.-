@@ -8,16 +8,18 @@ import {
   Tray,
 } from "electron";
 import { join } from "node:path";
-import { BackendProcess } from "./backend";
-import { CoreSocket } from "./ws";
 import { enableAutostart } from "./autostart";
 import { WallpaperManager } from "./wallpaper";
 import { createOverlay, createProject3D, createWallpaper } from "./windows";
+import { AgentService } from "./agent/service";
 
 /**
- * ACTIG desktop shell entrypoint. Boots the agent core, opens the (hidden) hologram
- * overlay, installs the tray + emergency-wake affordances + global wake hotkey, and bridges
- * messages between every renderer surface and the single core WebSocket.
+ * ACTIG desktop shell entrypoint. Boots the in-process agent (no external backend), opens the
+ * (hidden) hologram overlay, installs the tray + emergency-wake affordances + global wake
+ * hotkey, and bridges messages between every renderer surface and the agent.
+ *
+ * The reasoning brain (Claude) now runs inside this main process (`./agent/*`), so chat works
+ * with no separate Python process to start, crash, or be quarantined by antivirus.
  */
 
 // Single-instance: a second launch just wakes the existing one.
@@ -28,10 +30,9 @@ let project3d: BrowserWindow | null = null;
 let wallpaper: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
-const backend = new BackendProcess();
 const wallpaperMgr = new WallpaperManager(join(process.resourcesPath || app.getAppPath(), "native"));
 
-const socket = new CoreSocket(backend.url, (msg) => broadcast(msg));
+const agent = new AgentService(broadcast);
 
 function broadcast(msg: unknown): void {
   for (const w of [overlay, project3d, wallpaper]) {
@@ -44,18 +45,21 @@ function wake(source: "voice" | "emergency" | "hotkey" | "text"): void {
   if (!overlay) overlay = createOverlay();
   overlay.showInactive();
   overlay.setAlwaysOnTop(true, "screen-saver");
+  // The renderer speaks "ACTIG at your service sir" when it receives this (req 7).
   overlay.webContents.send("core:message", {
     type: "wake",
     payload: { source, greet: true },
   });
-  // Ask the core to perform the spoken reaction "ACTIG at your service sir" (req 7).
-  socket.send("wake", { source, greet: true });
 }
 
 function openProject3D(): void {
   if (!project3d) project3d = createProject3D();
   project3d.show();
   project3d.focus();
+}
+
+function closeProject3D(): void {
+  project3d?.hide();
 }
 
 async function toggleWallpaper(enabled: boolean): Promise<void> {
@@ -88,10 +92,10 @@ function buildTray(): void {
   tray.on("click", () => wake("emergency"));
 }
 
-/** Renderer → main → core. Renderers post these via the preload bridge. */
+/** Renderer → main → agent. Renderers post these via the preload bridge. */
 function wireIpc(): void {
-  // Forward a fully-formed envelope from a renderer to the core.
-  ipcMain.on("core:send", (_e, frame) => socket.sendRaw(frame));
+  // Forward a fully-formed envelope from a renderer to the in-process agent.
+  ipcMain.on("core:send", (_e, frame) => agent.handle(frame));
 
   // Toggle click-through so the overlay only intercepts the mouse over real UI (req 9).
   ipcMain.on("overlay:setInteractive", (_e, interactive: boolean) => {
@@ -99,18 +103,18 @@ function wireIpc(): void {
   });
 
   ipcMain.on("project3d:open", () => openProject3D());
-  ipcMain.on("project3d:close", () => project3d?.hide());
+  ipcMain.on("project3d:close", () => closeProject3D());
   ipcMain.on("wallpaper:set", (_e, enabled: boolean) => toggleWallpaper(enabled));
   ipcMain.handle("app:version", () => app.getVersion());
 }
 
 app.whenReady().then(() => {
   enableAutostart();
-  backend.start();
-  socket.connect();
   overlay = createOverlay();
+  agent.setHost({ wake, openProject3D, closeProject3D, toggleWallpaper, broadcast });
   buildTray();
   wireIpc();
+  agent.emitStatus(); // tell the overlay whether a brain is configured yet
 
   // Global wake hotkey works from any app/tab/screen (requirements 9, 15).
   globalShortcut.register("CommandOrControl+Alt+Space", () => wake("hotkey"));
@@ -118,9 +122,8 @@ app.whenReady().then(() => {
   app.on("second-instance", () => wake("emergency"));
 });
 
-app.on("window-all-closed", (e: Electron.Event) => e.preventDefault()); // stay resident in tray
+// Stay resident in the tray: subscribe but never quit when the overlay windows are hidden.
+app.on("window-all-closed", () => {});
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
-  socket.close();
-  backend.stop();
 });

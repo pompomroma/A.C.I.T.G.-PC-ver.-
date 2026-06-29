@@ -11,11 +11,9 @@ export default defineConfig({
   main: {
     build: {
       lib: { entry: resolve(__dirname, "src/main/index.ts") },
-      // `ws` has optional native add-ons (bufferutil, utf-8-validate). Bundling them inlines a
-      // broken native binding → "TypeError: bufferUtil.mask is not a function" when the socket
-      // sends its first frame. Externalize them so `ws` uses its pure-JS implementation; at
-      // runtime require() throws (they aren't shipped) and `ws` falls back cleanly.
-      rollupOptions: { external: ["electron", "bufferutil", "utf-8-validate"] },
+      // The agent runs in-process and talks to Claude via the global `fetch` — no `ws`, no
+      // native add-ons to bundle. Only `electron` needs to stay external.
+      rollupOptions: { external: ["electron"] },
     },
   },
   preload: {

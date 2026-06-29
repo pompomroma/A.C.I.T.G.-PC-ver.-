@@ -1,6 +1,6 @@
 {
   "name": "actig",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "description": "ACTIG — Full-stack local agentic AI for PC (Jarvis-style assistant)",
   "license": "MIT",

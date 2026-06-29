@@ -186,6 +186,19 @@ body {
   }
 }
 
+/* --- Voice status pill (listening / transcribing / errors) --- */
+.voice-status {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 /* --- Confirm dialog (guarded access) --- */
 .confirm {
   position: fixed;

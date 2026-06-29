@@ -32,17 +32,62 @@ export interface BrainStatus {
   message?: string;
 }
 
+/**
+ * Pick the most natural-sounding voice for a language. Windows ships low-quality legacy voices
+ * (e.g. "David"/"Zira") plus high-quality neural ones ("Aria"/"Jenny (Natural)"); Chromium also
+ * exposes "Google US English". We strongly prefer the natural/neural voices so ACTIG's English
+ * doesn't sound robotic, falling back through Google → any same-language voice → default.
+ */
+function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
+  const voices = window.speechSynthesis.getVoices();
+  if (!voices.length) return undefined;
+  const base = (lang.split("-")[0] || "en").toLowerCase();
+  const sameLang = voices.filter((v) => v.lang.toLowerCase().startsWith(base));
+  const pool = sameLang.length ? sameLang : voices;
+  const score = (v: SpeechSynthesisVoice): number => {
+    const n = v.name.toLowerCase();
+    let s = 0;
+    if (n.includes("natural")) s += 100;
+    if (/(aria|jenny|guy|ana|libby|sonia)/.test(n)) s += 60; // MS neural voices
+    if (n.includes("google")) s += 50;
+    if (v.lang.toLowerCase() === "en-us" || v.lang.toLowerCase() === base + "-" + base) s += 10;
+    if (/(david|zira|mark|hazel|microsoft)/.test(n)) s -= 5; // legacy SAPI voices
+    return s;
+  };
+  return [...pool].sort((a, b) => score(b) - score(a))[0];
+}
+
+let voicesReady = window.speechSynthesis?.getVoices().length > 0;
+if ("speechSynthesis" in window && !voicesReady) {
+  window.speechSynthesis.onvoiceschanged = () => {
+    voicesReady = true;
+  };
+}
+
 /** Speak text with the browser TTS (works in Electron, needs no backend voice stack). */
 function speak(text: string, lang = "en", muted = false): void {
   if (muted || !text?.trim() || !("speechSynthesis" in window)) return;
-  try {
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang.includes("-") ? lang : `${lang}-${lang.toUpperCase()}`;
-    window.speechSynthesis.cancel(); // interrupt any prior utterance (barge-in friendly)
-    window.speechSynthesis.speak(u);
-  } catch {
-    /* ignore TTS failures */
-  }
+  const utter = () => {
+    try {
+      const u = new SpeechSynthesisUtterance(text);
+      const v = pickVoice(lang);
+      if (v) {
+        u.voice = v;
+        u.lang = v.lang;
+      } else {
+        u.lang = lang.includes("-") ? lang : "en-US";
+      }
+      u.rate = 0.97; // a touch slower than default reads more naturally
+      u.pitch = 1.0;
+      window.speechSynthesis.cancel(); // interrupt any prior utterance (barge-in friendly)
+      window.speechSynthesis.speak(u);
+    } catch {
+      /* ignore TTS failures */
+    }
+  };
+  // Voices can be empty on first call; wait one tick for them to populate.
+  if (voicesReady || window.speechSynthesis.getVoices().length) utter();
+  else setTimeout(utter, 250);
 }
 
 /**
