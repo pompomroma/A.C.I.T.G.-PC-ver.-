@@ -11,7 +11,9 @@ import { FUNCTION_TOOLS, TOOL_BY_NAME, type ToolContext } from "./tools";
  * so no UI rewiring is needed. Replies are in the user's own language (the model mirrors it).
  */
 
-const MAX_TOOL_ROUNDS = 6;
+// A full build may take many turns (plan → many files → install → build → fix → package).
+const MAX_TOOL_ROUNDS = 40;
+const BUILD_MAX_TOKENS = 8192; // file contents in tool arguments are long
 const BRAIN = "nemotron";
 
 function systemPrompt(): string {
@@ -28,6 +30,18 @@ function systemPrompt(): string {
     "Sensitive or system-level actions will ask the user for one-tap confirmation automatically; you do",
     "not need to ask permission yourself, just call the tool.",
     "Keep spoken replies short and natural since they are read aloud.",
+    "",
+    "BUILDING PROGRAMS (vibe coding): when the user asks you to create/build a program, app, site,",
+    "game, or asset, you build the real thing end-to-end with your builder tools:",
+    "  1. Briefly restate the goal and pick a modern, high-quality, well-optimized tech stack.",
+    "  2. create_project, then write EVERY file with write_code_file — production-quality, idiomatic,",
+    "     typed, clean, with sensible structure (and generate_3d_model for 3D assets).",
+    "  3. run_build to install dependencies and build/test; READ the returned output and FIX any",
+    "     errors, then re-run, until it builds and runs cleanly.",
+    "  4. Only if the user asks, github_publish to their GitHub account.",
+    "  5. download_result to package the finished product into their Downloads folder.",
+    "Aim for best quality and optimized output. Prefer small, focused files. Don't stop after writing",
+    "files — verify by building. If a required language runtime is missing, say so plainly.",
   ].join("\n");
 }
 
@@ -60,6 +74,7 @@ export async function runTurn(userText: string, source: string, deps: RunDeps): 
         system: systemPrompt(),
         messages,
         tools: FUNCTION_TOOLS,
+        maxTokens: BUILD_MAX_TOKENS,
       });
 
       // No tools requested → final answer.

@@ -5,6 +5,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  session,
   Tray,
 } from "electron";
 import { join } from "node:path";
@@ -108,8 +109,19 @@ function wireIpc(): void {
   ipcMain.handle("app:version", () => app.getVersion());
 }
 
+/**
+ * Electron blocks getUserMedia by default, so the wake word + voice input would get no audio.
+ * Grant microphone/media to ACTIG's own windows (everything else stays default-deny).
+ */
+function grantMediaPermissions(): void {
+  const allow = new Set(["media", "audioCapture", "microphone"]);
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(allow.has(permission)));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => allow.has(permission));
+}
+
 app.whenReady().then(() => {
   enableAutostart();
+  grantMediaPermissions();
   overlay = createOverlay();
   agent.setHost({ wake, openProject3D, closeProject3D, toggleWallpaper, broadcast });
   buildTray();

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { homedir, hostname, platform, release, totalmem, freemem, userInfo } from "node:os";
 import { join, resolve } from "node:path";
 import type { FunctionTool } from "./llm";
+import { BUILDER_TOOLS } from "./builder";
 
 /** JSON-schema description of a tool (provider-neutral; mapped to NVIDIA/OpenAI below). */
 export interface ToolSpec {
@@ -344,10 +345,13 @@ export const TOOLS: AgentTool[] = [
   },
 ];
 
-export const TOOL_BY_NAME = new Map(TOOLS.map((t) => [t.spec.name, t]));
+/** Base PC/UI tools plus the autonomous project-builder tools (vibe coding). */
+export const ALL_TOOLS: AgentTool[] = [...TOOLS, ...BUILDER_TOOLS];
+
+export const TOOL_BY_NAME = new Map(ALL_TOOLS.map((t) => [t.spec.name, t]));
 
 /** Tools in NVIDIA NIM / OpenAI function-calling format. */
-export const FUNCTION_TOOLS: FunctionTool[] = TOOLS.map((t) => ({
+export const FUNCTION_TOOLS: FunctionTool[] = ALL_TOOLS.map((t) => ({
   type: "function",
   function: {
     name: t.spec.name,

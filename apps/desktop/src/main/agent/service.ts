@@ -14,7 +14,9 @@ import type { AgentHost, RiskLevel, ToolContext } from "./tools";
 export class AgentService {
   private client: LlmClient;
   private host: AgentHost | null = null;
-  private pendingConfirms = new Map<string, (approved: boolean) => void>();
+  private pendingConfirms = new Map<string, { resolve: (approved: boolean) => void; tool: string }>();
+  /** Tools the user chose "Always allow" for — pre-approved for the rest of the session. */
+  private approvedAlways = new Set<string>();
   private interrupted = false;
   private busy = false;
   private confirmSeq = 0;
@@ -56,7 +58,7 @@ export class AgentService {
         void this.onSetSecret(String(p.key || ""), String(p.value || ""));
         break;
       case "confirm_response":
-        this.resolveConfirm(String(p.callId || ""), !!p.approved);
+        this.resolveConfirm(String(p.callId || ""), !!p.approved, p.scope === "always" ? "always" : "once");
         break;
       case "interrupt":
         this.interrupted = true;
@@ -126,10 +128,12 @@ export class AgentService {
   }
 
   private requestConfirm(tool: string, description: string, risk: RiskLevel): Promise<boolean> {
+    // "Always allow" earlier this session pre-approves this tool (e.g. run_build during a build).
+    if (this.approvedAlways.has(tool)) return Promise.resolve(true);
     const callId = `cf${this.confirmSeq++}`;
     this.broadcast({ type: "confirm_request", payload: { callId, tool, description, risk } });
     return new Promise<boolean>((resolve) => {
-      this.pendingConfirms.set(callId, resolve);
+      this.pendingConfirms.set(callId, { resolve, tool });
       // Safety timeout: if the user never answers, treat as declined after 2 minutes.
       setTimeout(() => {
         if (this.pendingConfirms.delete(callId)) resolve(false);
@@ -137,11 +141,11 @@ export class AgentService {
     });
   }
 
-  private resolveConfirm(callId: string, approved: boolean): void {
-    const resolve = this.pendingConfirms.get(callId);
-    if (resolve) {
-      this.pendingConfirms.delete(callId);
-      resolve(approved);
-    }
+  private resolveConfirm(callId: string, approved: boolean, scope: "once" | "always"): void {
+    const entry = this.pendingConfirms.get(callId);
+    if (!entry) return;
+    this.pendingConfirms.delete(callId);
+    if (approved && scope === "always") this.approvedAlways.add(entry.tool);
+    entry.resolve(approved);
   }
 }

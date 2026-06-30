@@ -22,18 +22,21 @@ uninstall it.
 
 **A) Download the prebuilt installer (no toolchain, no building — recommended).** GitHub
 Actions builds the installers on a Windows runner and publishes them to **Releases** — both
-the versioned **`v0.3.0`** release and a rolling **"ACTIG latest build"**. Two variants:
+the versioned **`v0.4.0`** release and a rolling **"ACTIG latest build"**. Two variants:
 
 | Asset | Includes | Pick this if |
 |---|---|---|
 | **`ACTIG-Setup.exe`** | Everything the assistant needs: in-app **NVIDIA Nemotron** brain, **local Whisper** speech-to-text + wake word, natural text-to-speech | **Recommended** — the standard build does full voice + chat on its own |
 | **`ACTIG-Setup-voice.exe`** | Also bundles the legacy offline Python voice stack (faster-whisper, Piper, openWakeWord) | You specifically want the fully-offline Python voice models in `assets/` |
 
-> **v0.3.0 — the brain runs inside the app, powered by NVIDIA Nemotron.** ACTIG calls NVIDIA's
-> hosted Nemotron model directly from the desktop app and does speech recognition locally with
-> Whisper, so **chat and voice work with no separate background process** — the old "the AI
-> never replies" failures are gone. The Whisper model (~40 MB) downloads once on first voice use
-> and is then cached. You can also get either exe from **Actions → latest run → Artifacts**.
+> **v0.4.0 — replies fixed, voice fixed, and it builds whole programs.** ACTIG calls NVIDIA's
+> hosted **Nemotron** model directly from the app. This release fixes the real "model not found /
+> no reply" bug (the model id now uses the correct `nvidia/` namespace, with an automatic
+> fallback model), and the "voice never works" bug (the app now grants its own microphone
+> permission, which Electron blocked by default — so the wake word + speech input + voice
+> commands work). It also adds autonomous **program building** (see USE). Whisper speech-to-text
+> (~40 MB) downloads once on first voice use and caches. You can also get either exe from
+> **Actions → latest run → Artifacts**.
 
 **B) Build it locally with one double-click.** On a Windows PC with **Node 20+** and
 **Python 3.11** installed, double-click **`build.bat`** (or run
@@ -85,8 +88,11 @@ permission so voice and the wake word work. After that ACTIG lives in the tray. 
 **saying "wake up ACTIG"** (it answers *"ACTIG at your service sir"*), by tapping the
 always-visible **emergency button**, or with **Ctrl+Alt+Space**.
 
-> **Choosing the model.** ACTIG defaults to the Nemotron Ultra model id. To point it at a
-> different NVIDIA model, set the **`ACTIG_MODEL`** environment variable to the catalog id.
+> **Choosing the model.** ACTIG defaults to **`nvidia/nemotron-3-ultra-550b-a55b`** (the full,
+> namespaced id — a bare `nemotron-…` without the `nvidia/` prefix returns "model not found").
+> If that model isn't enabled on your key, ACTIG automatically falls back to
+> `nvidia/llama-3.1-nemotron-70b-instruct` so it still replies. To force a specific model, set the
+> **`ACTIG_MODEL`** environment variable (the `nvidia/` prefix is added for you if you omit it).
 > **Security note:** an API key is a credential — keep it in your env var / local file, not in
 > any shared repo, and rotate it if it leaks.
 
@@ -96,11 +102,18 @@ Talk or type — every feature works by voice **or** text on any screen: chat, r
 ("bring up the 3D project"), set it as your **wallpaper**, interrupt mid-sentence, mute either
 mic. Everything is saved to history and resumable.
 
+**Build whole programs (vibe coding).** Ask ACTIG to *"build me a full-stack todo app, best
+quality"* and it plans the stack, writes every file under `~/ACTIG/projects/<name>/`, runs the
+install/build and fixes its own errors, can generate 3D-model assets, optionally **publishes to
+the GitHub account signed in on this PC** (when you ask), and **downloads the finished product as
+a zip to your Downloads folder**. Build/install commands ask once for approval ("Always allow" to
+let the rest of the build run); see [`docs/`](docs/) for the guarded-access model.
+
 ---
 
 ## Architecture
 
-As of **v0.3.0** the reasoning brain and the agent loop run **inside the Electron main
+As of **v0.4.0** the reasoning brain and the agent loop run **inside the Electron main
 process** (`apps/desktop/src/main/agent/*`): it calls **NVIDIA Nemotron** (NIM's OpenAI-compatible
 Chat Completions API) directly with `fetch`, runs the guarded tools in Node, and broadcasts
 replies to every hologram surface — no separate process is needed to reply. Speech-to-text runs

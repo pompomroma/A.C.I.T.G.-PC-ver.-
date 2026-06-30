@@ -47,11 +47,13 @@ function pickVoice(lang: string): SpeechSynthesisVoice | undefined {
   const score = (v: SpeechSynthesisVoice): number => {
     const n = v.name.toLowerCase();
     let s = 0;
-    if (n.includes("natural")) s += 100;
-    if (/(aria|jenny|guy|ana|libby|sonia)/.test(n)) s += 60; // MS neural voices
+    if (/(natural|neural|online)/.test(n)) s += 100; // modern high-quality voices
+    if (/(aria|jenny|guy|ana|libby|sonia|emma|michelle|roger)/.test(n)) s += 60; // MS neural names
     if (n.includes("google")) s += 50;
+    if (!v.localService) s += 20; // cloud/remote voices sound far better than local SAPI
+    if (v.default) s += 5;
     if (v.lang.toLowerCase() === "en-us" || v.lang.toLowerCase() === base + "-" + base) s += 10;
-    if (/(david|zira|mark|hazel|microsoft)/.test(n)) s -= 5; // legacy SAPI voices
+    if (/(david|zira|mark|hazel)/.test(n)) s -= 20; // robotic legacy SAPI voices — avoid
     return s;
   };
   return [...pool].sort((a, b) => score(b) - score(a))[0];
@@ -77,9 +79,16 @@ function speak(text: string, lang = "en", muted = false): void {
       } else {
         u.lang = lang.includes("-") ? lang : "en-US";
       }
-      u.rate = 0.97; // a touch slower than default reads more naturally
+      u.rate = 0.95; // a touch slower than default reads more naturally
       u.pitch = 1.0;
       window.speechSynthesis.cancel(); // interrupt any prior utterance (barge-in friendly)
+      // Chromium pauses speech after ~15s; pump resume() to keep long replies going.
+      const keepAlive = window.setInterval(() => {
+        if (window.speechSynthesis.speaking) window.speechSynthesis.resume();
+        else window.clearInterval(keepAlive);
+      }, 8000);
+      u.onend = () => window.clearInterval(keepAlive);
+      u.onerror = () => window.clearInterval(keepAlive);
       window.speechSynthesis.speak(u);
     } catch {
       /* ignore TTS failures */
