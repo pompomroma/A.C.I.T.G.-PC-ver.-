@@ -43,3 +43,10 @@ Thumbs.db
 *.msi
 *.AppImage
 *.spec.bak
+
+# Wails build output
+wails/build/bin/
+
+# Wails embedded frontend must be committed (overrides the dist/ rule above)
+!wails/frontend/dist/
+!wails/frontend/dist/**

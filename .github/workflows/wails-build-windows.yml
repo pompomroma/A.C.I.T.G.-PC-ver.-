@@ -1,0 +1,49 @@
+name: Wails Build Windows
+
+# Builds the Wails (Go + WebView2) edition of ACTIG into a single ACTIG.exe.
+# This is an alternative to the Electron installer (smaller binary, typically fewer antivirus
+# false-positives). Download the exe from the run's Artifacts. Only runs when wails/** changes.
+
+on:
+  push:
+    branches: ["claude/local-agentic-ai-pc-td4621", "main"]
+    paths:
+      - "wails/**"
+      - ".github/workflows/wails-build-windows.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-wails-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: wails
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: false
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.9.2
+
+      - name: Add Go bin to PATH
+        run: Add-Content -Path $env:GITHUB_PATH -Value "$(go env GOPATH)\bin"
+
+      - name: Resolve Go modules
+        run: go mod tidy
+
+      - name: Build ACTIG.exe
+        run: wails build -platform windows/amd64 -o ACTIG.exe -skipbindings
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACTIG-wails-windows
+          path: wails/build/bin/ACTIG.exe
+          if-no-files-found: error
