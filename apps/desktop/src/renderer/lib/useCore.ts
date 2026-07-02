@@ -66,8 +66,10 @@ if ("speechSynthesis" in window && !voicesReady) {
   };
 }
 
-/** Speak text with the browser TTS (works in Electron, needs no backend voice stack). */
+/** Speak text with the browser TTS (dev / non-Windows only — on Windows the main process speaks). */
 function speak(text: string, lang = "en", muted = false): void {
+  // On Windows, ACTIG's main process speaks via SAPI (reliable); don't double-speak here.
+  if (typeof navigator !== "undefined" && navigator.userAgent.includes("Windows")) return;
   if (muted || !text?.trim() || !("speechSynthesis" in window)) return;
   const utter = () => {
     try {

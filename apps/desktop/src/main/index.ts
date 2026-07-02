@@ -13,6 +13,7 @@ import { enableAutostart } from "./autostart";
 import { WallpaperManager } from "./wallpaper";
 import { createOverlay, createProject3D, createWallpaper } from "./windows";
 import { AgentService } from "./agent/service";
+import { speakTts } from "./agent/tts";
 
 /**
  * ACTIG desktop shell entrypoint. Boots the in-process agent (no external backend), opens the
@@ -46,11 +47,12 @@ function wake(source: "voice" | "emergency" | "hotkey" | "text"): void {
   if (!overlay) overlay = createOverlay();
   overlay.showInactive();
   overlay.setAlwaysOnTop(true, "screen-saver");
-  // The renderer speaks "ACTIG at your service sir" when it receives this (req 7).
   overlay.webContents.send("core:message", {
     type: "wake",
     payload: { source, greet: true },
   });
+  // Speak the fixed wake reaction from the main process (reliable SAPI voice) — req 7.
+  speakTts("ACTIG at your service sir");
 }
 
 function openProject3D(): void {

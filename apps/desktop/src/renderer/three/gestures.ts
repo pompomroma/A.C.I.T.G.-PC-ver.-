@@ -31,22 +31,49 @@ export class GestureController {
   async enable(): Promise<void> {
     if (this.enabled) return;
     this.enabled = true;
-    const vision = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm",
-    );
-    this.landmarker = await HandLandmarker.createFromOptions(vision, {
-      baseOptions: {
-        modelAssetPath:
-          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-      },
-      numHands: 2,
-      runningMode: "VIDEO",
+    try {
+      // 1) Start the webcam first so it visibly activates and the permission resolves early.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 640, height: 480 },
+      });
+      this.video.srcObject = stream;
+      await this.video.play();
+      await this.videoReady();
+
+      // 2) Load the hand-tracking model. Pin the WASM to the SAME version as the bundled
+      //    @mediapipe/tasks-vision package — an unpinned/"latest" wasm can mismatch the JS API
+      //    and throw, which used to fail silently and leave the camera stuck "on".
+      const vision = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm",
+      );
+      this.landmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        },
+        numHands: 2,
+        runningMode: "VIDEO",
+      });
+      this.running = true;
+      this.loop();
+    } catch (e) {
+      // Reset everything so the user can retry (otherwise enabled stays true forever).
+      this.disable();
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+  }
+
+  /** Wait until the camera has real frame dimensions before feeding them to MediaPipe. */
+  private videoReady(): Promise<void> {
+    if (this.video.videoWidth > 0) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        this.video.removeEventListener("loadeddata", done);
+        resolve();
+      };
+      this.video.addEventListener("loadeddata", done);
+      setTimeout(done, 3000); // don't hang forever
     });
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-    this.video.srcObject = stream;
-    await this.video.play();
-    this.running = true;
-    this.loop();
   }
 
   disable(): void {
@@ -62,8 +89,15 @@ export class GestureController {
 
   private loop = (): void => {
     if (!this.running || !this.landmarker) return;
-    const res = this.landmarker.detectForVideo(this.video, performance.now());
-    const hands = res.landmarks ?? [];
+    let hands: Array<Array<{ x: number; y: number; z: number }>> = [];
+    try {
+      if (this.video.readyState >= 2 && this.video.videoWidth > 0) {
+        const res = this.landmarker.detectForVideo(this.video, performance.now());
+        hands = res.landmarks ?? [];
+      }
+    } catch {
+      // skip this frame; keep the loop alive
+    }
 
     // Two-hand scale (requirement 4)
     if (this.scale && hands.length === 2) {

@@ -44,16 +44,53 @@ button("delete", () => {
 });
 button("reset", () => scene.reset());
 
+// Small status line so camera failures are visible instead of silent.
+const status = document.createElement("div");
+status.id = "cam-status";
+status.style.cssText =
+  "position:fixed;left:50%;bottom:64px;transform:translateX(-50%);padding:6px 14px;border-radius:999px;font:13px/1.4 system-ui;color:#d8fbff;background:rgba(8,26,36,.7);border:1px solid rgba(138,246,255,.35);display:none;max-width:80vw;text-align:center";
+document.body.appendChild(status);
+function showStatus(msg: string, ms = 6000): void {
+  status.textContent = msg;
+  status.style.display = msg ? "block" : "none";
+  if (msg && ms) setTimeout(() => (status.style.display = "none"), ms);
+}
+
+async function enableCamera(): Promise<void> {
+  camBtn.textContent = "camera: …";
+  showStatus("Starting camera…", 0);
+  await gestures.enable();
+  camBtn.textContent = "camera: on";
+  camBtn.classList.add("on");
+  showStatus("Camera on — pinch to drag, two hands to scale.");
+}
+
+function disableCamera(): void {
+  gestures.disable();
+  camBtn.textContent = "camera: off";
+  camBtn.classList.remove("on");
+  showStatus("");
+}
+
+function cameraError(e: unknown): void {
+  camBtn.textContent = "camera: error";
+  camBtn.classList.remove("on");
+  const m = (e as any)?.message || String(e);
+  const hint = /denied|permission|notallowed/i.test(m)
+    ? " — allow camera access for ACTIG in Windows Settings → Privacy → Camera."
+    : /network|fetch|load/i.test(m)
+      ? " — the hand-tracking model needs internet on first use."
+      : "";
+  showStatus("Camera couldn't start: " + m + hint, 12000);
+}
+
 // camera gesture toggles (button + voice)
 const camBtn = button("camera: off", async () => {
-  if (gestures.enabled) {
-    gestures.disable();
-    camBtn.textContent = "camera: off";
-    camBtn.classList.remove("on");
-  } else {
-    await gestures.enable();
-    camBtn.textContent = "camera: on";
-    camBtn.classList.add("on");
+  try {
+    if (gestures.enabled) disableCamera();
+    else await enableCamera();
+  } catch (e) {
+    cameraError(e);
   }
 });
 button("close", () => window.actig.closeProject3D());
@@ -88,15 +125,11 @@ window.actig.onMessage(async (msg) => {
     const p = msg.payload || {};
     if (typeof p.drag === "boolean") gestures.drag = p.drag;
     if (typeof p.scale === "boolean") gestures.scale = p.scale;
-    if (p.enabled === true && !gestures.enabled) {
-      await gestures.enable();
-      camBtn.textContent = "camera: on";
-      camBtn.classList.add("on");
-    }
-    if (p.enabled === false && gestures.enabled) {
-      gestures.disable();
-      camBtn.textContent = "camera: off";
-      camBtn.classList.remove("on");
+    try {
+      if (p.enabled === true && !gestures.enabled) await enableCamera();
+      if (p.enabled === false && gestures.enabled) disableCamera();
+    } catch (e) {
+      cameraError(e);
     }
   }
 });

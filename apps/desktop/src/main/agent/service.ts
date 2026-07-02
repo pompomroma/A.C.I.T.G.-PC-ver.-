@@ -1,6 +1,7 @@
 import { LlmClient } from "./llm";
 import { runTurn } from "./loop";
 import { API_KEY_NAME, resolveApiKey, setSecret } from "./secrets";
+import { setTtsMuted, speakTts, stopTts } from "./tts";
 import type { AgentHost, RiskLevel, ToolContext } from "./tools";
 
 /**
@@ -62,11 +63,16 @@ export class AgentService {
         break;
       case "interrupt":
         this.interrupted = true;
+        stopTts(); // barge-in: stop ACTIG speaking so it can take new input
         break;
       case "wake":
         this.host?.wake((p.source as any) || "text");
         break;
-      // voice_state / sleep are renderer-local; nothing to do server-side.
+      case "voice_state":
+        // Keep main-process TTS in sync with the AI-speaker mute toggle.
+        if (typeof p.aiSpeakerMuted === "boolean") setTtsMuted(p.aiSpeakerMuted);
+        break;
+      // sleep is renderer-local; nothing to do server-side.
     }
   }
 
@@ -87,10 +93,9 @@ export class AgentService {
         });
       } else {
         this.emitStatus("API key accepted — ACTIG is ready.");
-        this.broadcast({
-          type: "assistant_message",
-          payload: { text: "Brain connected. I'm ready, sir — how can I help?", lang: "en", brain: "nemotron" },
-        });
+        const ready = "Brain connected. I'm ready, sir — how can I help?";
+        this.broadcast({ type: "assistant_message", payload: { text: ready, lang: "en", brain: "nemotron" } });
+        speakTts(ready);
       }
     }
   }

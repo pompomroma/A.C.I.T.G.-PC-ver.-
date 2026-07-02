@@ -1,6 +1,7 @@
 import { LlmClient, LlmError, type ChatMessage } from "./llm";
 import { append, logError, recent } from "./history";
 import { FUNCTION_TOOLS, TOOL_BY_NAME, type ToolContext } from "./tools";
+import { speakTts } from "./tts";
 
 /**
  * The ACTIG agent loop, running in the Electron main process.
@@ -79,7 +80,9 @@ export async function runTurn(userText: string, source: string, deps: RunDeps): 
 
       // No tools requested → final answer.
       if (reply.toolCalls.length === 0) {
-        emitAssistant(broadcast, reply.text || "…");
+        const text = reply.text || "…";
+        emitAssistant(broadcast, text);
+        speakTts(text); // ACTIG speaks its reply aloud (req 2)
         append({ ts: Date.now(), role: "assistant", text: reply.text });
         return;
       }
@@ -128,7 +131,9 @@ export async function runTurn(userText: string, source: string, deps: RunDeps): 
       }
     }
     // Ran out of tool rounds without a final text reply.
-    emitAssistant(broadcast, "I've done what I can on that — let me know how you'd like to continue.");
+    const done = "I've done what I can on that — let me know how you'd like to continue.";
+    emitAssistant(broadcast, done);
+    speakTts(done);
   } catch (e) {
     handleError(e, broadcast);
   }
@@ -151,4 +156,5 @@ function handleError(e: unknown, broadcast: RunDeps["broadcast"]): void {
   }
   logError(text);
   broadcast({ type: "assistant_message", payload: { text, lang: "en", brain: BRAIN, errorExplanation: text } });
+  speakTts(text);
 }
